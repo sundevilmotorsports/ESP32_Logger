@@ -1,7 +1,7 @@
 {
     "version":            "1.2",
     "project_name":       "component_test",
-    "project_version":    "a4334dc",
+    "project_version":    "4f859d5-dirty",
     "project_path":       "C:/Users/Alexs/Documents/GitHub/ESP32_Logger/component_test",
     "idf_path":           "C:/Users/Alexs/esp/v5.3.3/esp-idf",
     "build_dir":          "C:/Users/Alexs/Documents/GitHub/ESP32_Logger/component_test/build",
