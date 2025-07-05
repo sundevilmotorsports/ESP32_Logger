@@ -39,7 +39,7 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/riscv/cmake_install.cmake")
+  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/xtensa/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
@@ -519,12 +519,22 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
+  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/perfmon/cmake_install.cmake")
+endif()
+
+if(NOT CMAKE_INSTALL_LOCAL_ONLY)
+  # Include the install script for the subdirectory.
   include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/rt/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
   include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/spiffs/cmake_install.cmake")
+endif()
+
+if(NOT CMAKE_INSTALL_LOCAL_ONLY)
+  # Include the install script for the subdirectory.
+  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/touch_element/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
@@ -540,131 +550,6 @@ endif()
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
   include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/wifi_provisioning/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/chmorgan__esp-libhelix-mp3/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__esp-modbus/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__esp-zboss-lib/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__esp-zigbee-lib/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__libsodium/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__mdns/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__cbor/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__esp-dsp/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__esp_diag_data_store/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__rmaker_common/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__esp_diagnostics/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__esp_insights/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__esp_modem/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__jsmn/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__json_parser/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__json_generator/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__esp_schedule/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__network_provisioning/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__esp-serial-flasher/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__esp_rcp_update/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__esp_secure_cert_mgr/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__esp_rainmaker/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__qrcode/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/joltwallet__littlefs/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/esp-idf/espressif__arduino-esp32/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)

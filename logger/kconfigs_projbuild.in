@@ -3,5 +3,3 @@ source "C:/Users/Alexs/esp/v5.4.1/esp-idf/components/esp_app_format/Kconfig.proj
 source "C:/Users/Alexs/esp/v5.4.1/esp-idf/components/esp_rom/Kconfig.projbuild"
 source "C:/Users/Alexs/esp/v5.4.1/esp-idf/components/esptool_py/Kconfig.projbuild"
 source "C:/Users/Alexs/esp/v5.4.1/esp-idf/components/partition_table/Kconfig.projbuild"
-source "C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/managed_components/espressif__arduino-esp32/Kconfig.projbuild"
-source "C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/managed_components/espressif__esp_rainmaker/Kconfig.projbuild"
