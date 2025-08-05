@@ -1,2 +1,0 @@
-C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/CMakeFiles/edit_cache.dir
-C:/Users/Alexs/Documents/GitHub/ESP32_Logger/logger/CMakeFiles/rebuild_cache.dir
