@@ -426,7 +426,7 @@ void print_dtc_info(void *pvParameters) {
         printf("\nDevice\t\tStatus\t\tTime from Last Response (ms)\n");
         printf("========================================\n");
         for (int i = 0; i < DTC_COUNT; i++) {
-            printf("%s\t\t%s\t\t%lld\n", 
+            printf("%s\t\t%s\t\t%llu\n", 
                 dtc_device_names[i], 
                 dtc_devices[i]->errState ? "OK" : "ERROR", 
                 pdMS_TO_TICKS(xTaskGetTickCount()) - dtc_devices[i]->prevTime);

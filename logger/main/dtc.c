@@ -2,6 +2,13 @@
 #include <stdlib.h>
 #include "esp_log.h" 
 
+
+const char* dtc_device_names[] = {
+    #define X(device) #device,
+    DTC_DEVICES
+    #undef X
+};
+
 static const char *TAG = "DTC_ERROR";
 can_dtc *dtc_devices[DTC_COUNT];
 
@@ -20,7 +27,7 @@ can_dtc *dtc_devices[DTC_COUNT];
  * 
  * @note Memory allocation failure will set errState to 1 and log an error
  */
-void DTC_CAN_Init_Device(can_dtc *dtc, uint8_t index, uint8_t measures, uint16_t threshold, uint32_t start_time){
+void DTC_CAN_Init_Device(can_dtc *dtc, uint8_t index, uint8_t measures, uint16_t threshold, uint64_t start_time){
     dtc->errState = 0; // Clear error state
     dtc->DTC_Idx = index; // Set DTC index
     dtc->measures = measures; // Set goal number of measurements
@@ -28,7 +35,7 @@ void DTC_CAN_Init_Device(can_dtc *dtc, uint8_t index, uint8_t measures, uint16_t
     dtc->totalTime = start_time; // Reset total time
     dtc->prevTime = start_time; // Set previous time to start time
     dtc->threshold = threshold; // Set threshold for error state
-    dtc->timeBuffer = (uint32_t *)malloc(measures * sizeof(uint32_t)); // Allocate memory for time buffer
+    dtc->timeBuffer = (uint64_t *)malloc(measures * sizeof(uint64_t)); // Allocate memory for time buffer
 
     if (dtc->timeBuffer == NULL) {
         // Handle memory allocation failure
@@ -48,7 +55,7 @@ void DTC_CAN_Init_Device(can_dtc *dtc, uint8_t index, uint8_t measures, uint16_t
  * @param dtc Pointer to the can_dtc structure to update
  * @param response_time Current response time in milliseconds
  */
-void DTC_CAN_Response_Measurement(can_dtc *dtc, uint32_t response_time) {
+void DTC_CAN_Response_Measurement(can_dtc *dtc, uint64_t response_time) {
     if (dtc == NULL || dtc->timeBuffer == NULL) {
         ESP_LOGE(TAG, "Invalid DTC structure or time buffer -> Index: %d", dtc ? dtc->DTC_Idx : -1);
         return;
@@ -75,7 +82,7 @@ void DTC_CAN_Response_Measurement(can_dtc *dtc, uint32_t response_time) {
  * @param dtc Pointer to the can_dtc structure to update
  * @param current_time Current time in milliseconds
  */
-void DTC_CAN_Update_Error_State(can_dtc *dtc, uint32_t current_time) {
+void DTC_CAN_Update_Error_State(can_dtc *dtc, uint64_t current_time) {
     if (dtc == NULL || dtc->timeBuffer == NULL) {
         ESP_LOGE(TAG, "Invalid DTC structure or time buffer -> Index: %d", dtc ? dtc->DTC_Idx : -1);
         return;
@@ -84,7 +91,7 @@ void DTC_CAN_Update_Error_State(can_dtc *dtc, uint32_t current_time) {
     current_time = current_time - dtc->prevTime; // Calculate time since last measurement
 
     // Find max in current buffer
-    uint32_t max_response = 0;
+    uint64_t max_response = 0;
     for (uint8_t i = 0; i < dtc->measures; i++) {
         if (dtc->timeBuffer[i] > max_response) {
             max_response = dtc->timeBuffer[i];
@@ -102,7 +109,7 @@ void DTC_CAN_Update_Error_State(can_dtc *dtc, uint32_t current_time) {
     return;
 }
 
-void DTC_Init(uint32_t start_time){
+void DTC_Init(uint64_t start_time){
     for(int i = 0; i < DTC_COUNT; i++) {
         dtc_devices[i] = (can_dtc *)malloc(sizeof(can_dtc));
         if (dtc_devices[i] == NULL) {
@@ -114,7 +121,7 @@ void DTC_Init(uint32_t start_time){
 
 }
 
-void DTC_Error_Check(uint32_t current_time) {
+void DTC_Error_Check(uint64_t current_time) {
     for (int i = 0; i < DTC_COUNT; i++) {
         if (dtc_devices[i] != NULL) {
             DTC_CAN_Update_Error_State(dtc_devices[i], current_time);

@@ -24,11 +24,11 @@ typedef struct {
 	uint8_t measures; // Goal Number of Measurements to Calculate Average Response Time (MAX: 256)
 	uint8_t bufferIndex; // Index of the Current Measurement in the Buffer
 
-	uint32_t totalTime; //Time (ms) from Last Average Response Time Calculation
+	uint64_t totalTime; //Time (ms) from Last Average Response Time Calculation
 	//This data can be received from the CAN_RDTxR register (I copied the data type hehe)
-	uint32_t prevTime;
+	uint64_t prevTime;
 	uint16_t threshold; //Store the percentage of avg response time over allowed before throwing an error
-	uint32_t *timeBuffer; //Buffer to Store the Last N Response Times (N = measures)
+	uint64_t *timeBuffer; //Buffer to Store the Last N Response Times (N = measures)
 
 }can_dtc; //This name needs work I know... <- Have confidence, can_dtc is a great name!
 
@@ -64,18 +64,14 @@ typedef enum {
     DTC_COUNT
 } DTC_Channel;
 
-const char* dtc_device_names[] = {
-    #define X(device) #device,
-    DTC_DEVICES
-    #undef X
-};
+extern const char* dtc_device_names[DTC_COUNT];
 
 extern can_dtc *dtc_devices[DTC_COUNT];
 
 
-void DTC_CAN_Init_Device(can_dtc *dtc, uint8_t index, uint8_t measures, uint16_t threshold, uint32_t start_time);
-void DTC_CAN_Update_Error_State(can_dtc *dtc, uint32_t current_time);
-void DTC_CAN_Response_Measurement(can_dtc *dtc, uint32_t response_time);
-void DTC_Init(uint32_t start_time);
-void DTC_Error_Check(uint32_t current_time);
+void DTC_CAN_Init_Device(can_dtc *dtc, uint8_t index, uint8_t measures, uint16_t threshold, uint64_t start_time);
+void DTC_CAN_Update_Error_State(can_dtc *dtc, uint64_t current_time);
+void DTC_CAN_Response_Measurement(can_dtc *dtc, uint64_t response_time);
+void DTC_Init(uint64_t start_time);
+void DTC_Error_Check(uint64_t current_time);
 #endif
