@@ -160,6 +160,10 @@ static SemaphoreHandle_t char_mutex;
 static QueueHandle_t uart_event_queue = NULL;
 static const char *TAG = "UART_APP";
 
+
+static TaskHandle_t dtc_info_task_handle = NULL;
+static bool dtc_info_running = false;
+
 typedef struct {
 	uint16_t ambTemp;
 	uint16_t objTemp;
@@ -403,6 +407,39 @@ static void uart_init(void){
     ESP_LOGI(TAG, "UART initialized successfully");
 }
 
+void print_dtc_info(void *pvParameters) {
+
+    const TickType_t xFrequency = pdMS_TO_TICKS(100); // 100 ms
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+
+    while(1){
+        // Check if task should continue running
+        if (!dtc_info_running) {
+            break; // Exit the task loop
+        }
+        
+        // Wait for the next cycle (10Hz = every 100ms)
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+
+        printf("\033[2J\033[H"); // Clear screen and move cursor to top
+        printf("\n=== DTC Information ===\n");
+        printf("\nDevice\t\tStatus\t\tTime from Last Response (ms)\n");
+        printf("========================================\n");
+        for (int i = 0; i < DTC_COUNT; i++) {
+            printf("%s\t\t%s\t\t%lld\n", 
+                dtc_device_names[i], 
+                dtc_devices[i]->errState ? "OK" : "ERROR", 
+                pdMS_TO_TICKS(xTaskGetTickCount()) - dtc_devices[i]->prevTime);
+        }
+        printf("========================\n");
+
+    }
+
+    // Task is ending, clean up
+    dtc_info_task_handle = NULL;
+    vTaskDelete(NULL);
+
+}
 
 void print_cpu_usage(void) {
     TaskStatus_t *pxTaskStatusArray;
@@ -471,6 +508,15 @@ void command_processor_task(void *param) {
         
         if (input != '\0') {
             ESP_LOGI(TAG, "Processing input: %c", input);
+
+            // Stop DTC info task if it's running and a new command is issued (except 'd'/'D')
+            if (dtc_info_running && (input != 'd' && input != 'D')) {
+                dtc_info_running = false;
+                if (dtc_info_task_handle != NULL) {
+                    vTaskDelay(pdMS_TO_TICKS(150)); // Give task time to stop
+                }
+                printf("\033[2J\033[H"); // Clear screen
+            }
             
             switch (input) {
                 case '1':
@@ -509,7 +555,31 @@ void command_processor_task(void *param) {
                     vTaskDelay(pdMS_TO_TICKS(1000));
                     esp_restart();
                     break;
+                case 'd':
+                case 'D':
+                    if(!dtc_info_running && dtc_info_task_handle == NULL) {
+                        printf("=== Starting DTC Information Display ===\n");
+                        printf("Press any other key to stop...\n");
+                        vTaskDelay(pdMS_TO_TICKS(500));
+                        
+                        dtc_info_running = true;
+                        BaseType_t result = xTaskCreate(print_dtc_info, "dtc_info_display", 2048, NULL, 7, &dtc_info_task_handle);
+                        if (result != pdPASS) {
+                            ESP_LOGE(TAG, "Failed to create DTC info task");
+                            dtc_info_running = false;
+                        }
+                    } else if (dtc_info_running) {
+                        printf("=== Stopping DTC Information Display ===\n");
+                        dtc_info_running = false;
+                        // Wait for task to clean up
+                        while (dtc_info_task_handle != NULL) {
+                            vTaskDelay(pdMS_TO_TICKS(50));
+                        }
+                    } else {
+                        printf("DTC display is already starting/stopping...\n");
+                    }
                     
+                    break;
                 case 'h':
                 case 'H':
                 case '?':

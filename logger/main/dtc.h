@@ -32,42 +32,43 @@ typedef struct {
 
 }can_dtc; //This name needs work I know... <- Have confidence, can_dtc is a great name!
 
+#define DTC_DEVICES \
+    X(frWheelBoard_DTC) \
+    X(flWheelBoard_DTC) \
+    X(rrWheelBoard_DTC) \
+    X(rlWheelBoard_DTC) \
+    X(fBrakePress_DTC) \
+    X(rBrakePress_DTC) \
+    X(steer_DTC) \
+    X(flShock_DTC) \
+    X(frShock_DTC) \
+    X(rlShock_DTC) \
+    X(rrShock_DTC) \
+    X(flStrainGauge_DTC) \
+    X(frStrainGauge_DTC) \
+    X(rlStrainGauge_DTC) \
+    X(rrStrainGauge_DTC) \
+    X(imu_DTC) \
+    X(brakeNthrottle_DTC) \
+    X(gps_0_DTC) \
+    X(gps_1_DTC) \
+    X(shifter_DTC)
+
 
 
 // DTC Index Enum
 typedef enum {
-    // CAN Device DTC Indexes (0-3)
-    frWheelBoard_DTC,
-    flWheelBoard_DTC,
-    rrWheelBoard_DTC,
-    rlWheelBoard_DTC,
-    // ADC Device DTC Indexes (4-10)
-    fBrakePress_DTC,
-    rBrakePress_DTC,
-    steer_DTC,
-    flShock_DTC,
-    frShock_DTC,
-    rlShock_DTC,
-    rrShock_DTC,
-
-    // String Gauge DTC Indexes (11-14)
-    flStrainGauge_DTC,
-    frStrainGauge_DTC,
-    rlStrainGauge_DTC,
-    rrStrainGauge_DTC,
-
-    // IMU and Brake/Throttle DTC Indexes (15-16)
-    imu_DTC,
-    brakeNthrottle_DTC,
-
-    // GPS Device DTC Indexes (17-18)
-    gps_0_DTC,
-    gps_1_DTC,
-
-    // Shifter DTC Index (19)
-    shifter_DTC,
+    #define X(device) device,
+    DTC_DEVICES
+    #undef X
     DTC_COUNT
 } DTC_Channel;
+
+const char* dtc_device_names[] = {
+    #define X(device) #device,
+    DTC_DEVICES
+    #undef X
+};
 
 extern can_dtc *dtc_devices[DTC_COUNT];
 
