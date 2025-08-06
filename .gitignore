@@ -26,6 +26,30 @@ ldgen_libraries*
 kconfigs*.in
 gdbinit/
 
+# ESP-IDF generated directories and files (prevent build artifacts)
+*/esp-idf/
+esp-idf/
+**/cmake_install.cmake
+**/*.bat
+**/CMakeFiles/
+**/sections.ld-*
+**/git-data/
+*/build/
+*/bootloader/
+*/bootloader-prefix/
+*/config/
+*/gdbinit/
+
+# Additional ESP-IDF build artifacts
+*/bootloader-prefix/
+*/config/kconfig_menus.json
+*/config/sdkconfig.cmake
+*/config/sdkconfig.h
+*/config/sdkconfig.json
+**/*-stamp/*
+**/*-cfgcmd.txt
+**/*-mkdirs.cmake
+
 # Python
 __pycache__/
 *.py[cod]
