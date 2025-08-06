@@ -8,6 +8,7 @@
 #include "esp_timer.h"
 #include "esp_freertos_hooks.h"
 #include <string.h>
+#include "dtc.h"
 
 
 
@@ -19,7 +20,7 @@
 #define CAN_CTX 11 //GPIO 18
 #define CAN_RTX 12 //GPIO 8
 
-// Define your channels using a macro, including some entries with integers at the end
+// Define all log channels with preprocessor macros for enum and file header generation
 #define LOG_CHANNELS \
     X(TS) \
     X(TS1) \
@@ -149,14 +150,36 @@ enum LogChannel {
 uint8_t logBuffer[CH_COUNT];
 uint8_t usbBuffer[64];
 
+//Stores the Date and Time of the Latest Compile (21 Bytes)
+const char compileDateTime[] = __DATE__ " " __TIME__;
+
+
 // Shared character + mutex
 static char last_char = '\0';
 static SemaphoreHandle_t char_mutex;
 static QueueHandle_t uart_event_queue = NULL;
 static const char *TAG = "UART_APP";
 
+typedef struct {
+	uint16_t ambTemp;
+	uint16_t objTemp;
+	uint16_t rpm;
+} wheel_data_s_t;
 
-
+//Logging variables
+uint8_t				  TXDAT[8];
+uint32_t count = 0;
+uint32_t imuCount = 0;
+uint32_t xAccel = 0, yAccel = 0, zAccel = 0;
+uint32_t xGyro = 0, yGyro = 0, zGyro = 0;
+uint16_t frsg = 0, flsg = 0, rrsg = 0, rlsg = 0;
+wheel_data_s_t frw, flw, rlw, rrw;
+uint8_t testNo = 0;
+uint8_t canFifoFull = 0;
+uint8_t drs = 0;
+uint16_t brakeFluid = 0, throttleLoad = 0, brakeLoad = 0;
+uint16_t oilPress = 0, driven_wspd = 0;
+uint8_t ect = 0, tps = 0, aps = 0, shift0 = 0, shift1 = 0, shift2 = 0;
 
 
 // Queue to store received messages
@@ -194,15 +217,145 @@ static void twai_init(void){
 }
 
 static void process_can_message(twai_message_t *message) {
-    switch (message->identifier) {
-        case 0x4e3:
-            for(int i = TS; i <= TS3; i++){
-                logBuffer[i] = message->data[i];
-            }
+    switch(message->identifier) {
+        case 0x35F:
+            drs = message->data[0];
+            break;
+            
+        case 0x360:
+            //IMU Data
+            xAccel = message->data[0] << 24 | message->data[1] << 16 | message->data[2] << 8 | message->data[3];
+            yAccel = message->data[4] << 24 | message->data[5] << 16 | message->data[6] << 8 | message->data[7];
+            imuCount++;
+            
+            //IMU DTC Check
+            break;
+            
+        case 0x361:
+            //IMU Data
+            zAccel = message->data[0] << 24 | message->data[1] << 16 | message->data[2] << 8 | message->data[3];
+            xGyro = message->data[4] << 24 | message->data[5] << 16 | message->data[6] << 8 | message->data[7];
+            imuCount++;
+
+            //IMU DTC Check
+            break;
+            
+        case 0x362:
+            //IMU Data
+            yGyro = message->data[0] << 24 | message->data[1] << 16 | message->data[2] << 8 | message->data[3];
+            zGyro = message->data[4] << 24 | message->data[5] << 16 | message->data[6] << 8 | message->data[7];
+            imuCount++;
+
+            //IMU DTC Response Update
+            DTC_CAN_Response_Measurement(dtc_devices[imu_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            break;
+            
+        case 0x363:
+            //Front Left Wheel Board
+            flw.rpm = message->data[0] << 8 | message->data[1];
+            flw.objTemp = message->data[2] << 8 | message->data[3];
+            flw.ambTemp = message->data[4] << 8 | message->data[5];
+
+            //DTC Response Update
+            DTC_CAN_Response_Measurement(dtc_devices[flWheelBoard_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            break;
+            
+        case 0x364:
+            //Front Right Wheel Board
+            frw.rpm = message->data[0] << 8 | message->data[1];
+            frw.objTemp = message->data[2] << 8 | message->data[3];
+            frw.ambTemp = message->data[4] << 8 | message->data[5];
+
+            //DTC Response Update
+            DTC_CAN_Response_Measurement(dtc_devices[frWheelBoard_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            break;
+            
+        case 0x365:
+            //Rear Right Wheel Board
+            rrw.rpm = message->data[0] << 8 | message->data[1];
+            rrw.objTemp = message->data[2] << 8 | message->data[3];
+            rrw.ambTemp = message->data[4] << 8 | message->data[5];
+
+            //DTC Response Update
+            DTC_CAN_Response_Measurement(dtc_devices[rrWheelBoard_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            break;
+            
+        case 0x366:
+            //Rear Left Wheel Board
+            rlw.rpm = message->data[0] << 8 | message->data[1];
+            rlw.objTemp = message->data[2] << 8 | message->data[3];
+            rlw.ambTemp = message->data[4] << 8 | message->data[5];
+
+            //DTC Response Update
+            DTC_CAN_Response_Measurement(dtc_devices[rlWheelBoard_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            break;
+            
+        case 0x4e2:
+            //Front Left String Gauge
+            flsg = message->data[0] << 8 | message->data[1];
+
+            //String Gauge DTC Check
+            DTC_CAN_Response_Measurement(dtc_devices[flStrainGauge_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
 
             break;
-        default:
-            ESP_LOGI(TAG, "Unknown message ID: 0x%lu", message->identifier);
+            
+        case 0x4e3:
+            //Front Right String Gauge
+            frsg = message->data[0] << 8 | message->data[1];
+
+            //String Gauge DTC Check
+            DTC_CAN_Response_Measurement(dtc_devices[frStrainGauge_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            break;
+            
+        case 0x4e4:
+            //Rear Right String Gauge
+            rrsg = message->data[0] << 8 | message->data[1];
+
+            //String Gauge DTC Check
+            DTC_CAN_Response_Measurement(dtc_devices[rrStrainGauge_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            break;
+            
+        case 0x4e5:
+            //Rear Left String Gauge
+            rlsg = message->data[0] << 8 | message->data[1];
+
+            //String Gauge DTC Check
+            DTC_CAN_Response_Measurement(dtc_devices[rlStrainGauge_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            break;
+            
+        case 0x3e8:
+            //Engine CAN Stream 2
+            switch(message->data[0]){
+                //Frame 1
+                case 0x0:
+                    // engine_speed = message->data[1] << 8 | message->data[2];
+                    ect = message->data[3];
+                    // oilTemp = message->data[4];
+                    oilPress = message->data[5] << 8 | message->data[6];
+                    //TODO: Could also add Park/Neutral Status (Stored on message->data[7])
+                    break;
+
+                case 0x1:
+                    tps = message->data[2];
+                    driven_wspd = message->data[4] << 8 | message->data[5];
+                    break;
+                    
+                case 0x2:
+                    aps = message->data[1];
+                    break;
+            }
+            break;
+
+        case 0x40:
+            // Shifter Data
+            shift0 = message->data[0];
+            shift1 = message->data[1];
+            shift2 = message->data[2];
+            if((shift1 != 1) | (shift2 != 1)) {
+                TXDAT[1] = shift1;
+                TXDAT[2] = shift2;
+            }
+            DTC_CAN_Response_Measurement(dtc_devices[shifter_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
             break;
     }
 }
@@ -277,7 +430,7 @@ void print_cpu_usage(void) {
         printf("==============================================\n");
         
         // Find IDLE task runtime (CPU downtime)
-        uint32_t idle_time = 0;
+        uint64_t idle_time = 0;
         
         for (x = 0; x < uxArraySize; x++) {
             if (strstr(pxTaskStatusArray[x].pcTaskName, "IDLE") != NULL) {
@@ -285,16 +438,16 @@ void print_cpu_usage(void) {
             }
             
             // Calculate percentage with safety check
-            ulStatsAsPercentage = (pxTaskStatusArray[x].ulRunTimeCounter * 100UL) / ulTotalTime;
+            ulStatsAsPercentage = (pxTaskStatusArray[x].ulRunTimeCounter * 100ULL) / ulTotalTime;
             
             printf("%s\t\t%llu\t\t%llu%%\n", 
                    pxTaskStatusArray[x].pcTaskName, 
                    pxTaskStatusArray[x].ulRunTimeCounter, 
                    ulStatsAsPercentage);
         }
-        
-        uint32_t idle_percentage = (idle_time * 100UL) / ulTotalTime;
-        printf("\nTotal CPU Idle Time: %" PRIu32 " ticks (%" PRIu32 "%%)\n", idle_time, idle_percentage);
+
+        uint64_t idle_percentage = (idle_time * 100ULL) / ulTotalTime;
+        printf("\nTotal CPU Idle Time: %" PRIu64 " ticks (%" PRIu64 "%%)\n", idle_time, idle_percentage);
         printf("Total Runtime: %llu ticks\n", ulTotalTime);
         
         vPortFree(pxTaskStatusArray);
@@ -434,6 +587,24 @@ void uart_event_task(void *pvParameters) {
     }
 }
 
+// Task that runs DTC error checking at 50Hz
+void dtc_task(void *pvParameters) {
+    const TickType_t xFrequency = pdMS_TO_TICKS(20); // 50Hz = 20ms period
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+    
+    ESP_LOGI(TAG, "DTC error check task started at 50Hz");
+    
+    while (1) {
+        // Wait for the next cycle (50Hz = every 20ms)
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+        
+        // Get current time in ticks for DTC functions
+        uint32_t current_time = pdTICKS_TO_MS(xTaskGetTickCount());
+        
+        // Run the DTC error check
+        DTC_Error_Check(current_time);
+    }
+}
 
 
 void app_main(void)
@@ -464,17 +635,19 @@ void app_main(void)
         ESP_LOGE(TAG, "Failed to create command_processor_task");
         return;
     }
+
+        // Add DTC error checking task
+    result = xTaskCreate(dtc_task, "dtc_check", 2048, NULL, 6, NULL);
+    if (result != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create dtc_task");
+        return;
+    }
     
     ESP_LOGI(TAG, "All tasks created successfully");
     
     // Show welcome message and help
     vTaskDelay(pdMS_TO_TICKS(500)); // Wait for tasks to start
-    printf("\n" \
-           "====================================\n" \
-           "    ESP32 UART Command Interface    \n" \
-           "====================================\n" \
-           "Type 'H' for help menu\n" \
-           "Ready for commands...\n\n");
+
     
     // Main loop - keep system alive
     while(1) {
