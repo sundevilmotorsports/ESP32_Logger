@@ -10,6 +10,7 @@
 #include <string.h>
 #include "dtc.h"
 
+//TODO: Add SD card file storage
 
 
 #define UART_PORT UART_NUM_0  // or whichever UART port you're using
