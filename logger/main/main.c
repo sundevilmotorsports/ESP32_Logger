@@ -366,28 +366,37 @@ static void process_can_message(twai_message_t *message) {
 }
 
 static void twai_receive_task(void *pvParameters) {
-    twai_message_t rx_message;
+    twai_message_t rx_msg;
     
     while (1) {
-        // Wait for message reception (blocking call)
-        if (twai_receive(&rx_message, portMAX_DELAY) == ESP_OK) {
+        // Use timeout instead of blocking indefinitely
+        esp_err_t result = twai_receive(&rx_msg, pdMS_TO_TICKS(100)); // 100ms timeout
+        
+        if (result == ESP_OK) {
             // Process the received message
-            // ESP_LOGI(TAG, "Received CAN message:");
-            // ESP_LOGI(TAG, "ID: 0x%lu, DLC: %d", rx_message.identifier, rx_message.data_length_code);
+            process_can_message(&rx_msg);
             
-            // // Print data bytes
-            // printf("Data: ");
-            // for (int i = 0; i < rx_message.data_length_code; i++) {
-            //     printf("0x%02X ", rx_message.data[i]);
-            // }
-            // printf("\n");
+            // Optional: Add to queue for other tasks
+            if (rx_queue != NULL) {
+                xQueueSend(rx_queue, &rx_msg, 0);
+            }
             
-            // Add your message processing logic here
-            process_can_message(&rx_message);
+            // Give semaphore to notify other tasks
+            if (rx_sem != NULL) {
+                xSemaphoreGive(rx_sem);
+            }
+        } else if (result == ESP_ERR_TIMEOUT) {
+            // Timeout occurred - this is normal, just continue
+            // This allows the watchdog to be reset
+        } else {
+            // Handle other errors
+            ESP_LOGW(TAG, "TWAI receive error: %s", esp_err_to_name(result));
         }
+        
+        // Small delay to prevent task from consuming too much CPU
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
-
 
 
 static void uart_init(void){
@@ -410,8 +419,11 @@ static void uart_init(void){
 
 void print_dtc_info(void *pvParameters) {
 
-    const TickType_t xFrequency = pdMS_TO_TICKS(100); // 100 ms
+    const TickType_t xFrequency = pdMS_TO_TICKS(500); // 100 ms
     TickType_t xLastWakeTime = xTaskGetTickCount();
+    
+    char output_buffer[1000];
+    char temp[100];
 
     while(1){
         // Check if task should continue running
@@ -422,17 +434,20 @@ void print_dtc_info(void *pvParameters) {
         // Wait for the next cycle (10Hz = every 100ms)
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
 
+
         printf("\033[2J\033[H"); // Clear screen and move cursor to top
-        printf("\n=== DTC Information ===\n");
-        printf("\nDevice\t\tStatus\t\tTime from Last Response (ms)\n");
-        printf("========================================\n");
+        sprintf(output_buffer, "\n=== DTC Information ===\n\n%-20s %-10s %10s\n===============================================\n", "Device", "Status", "Time (ms)");
         for (int i = 0; i < DTC_COUNT; i++) {
-            printf("%s\t\t%s\t\t%llu\n", 
+            sprintf(temp, "%-20s %-10s %10llu\n", 
                 dtc_device_names[i], 
                 dtc_devices[i]->errState ? "OK" : "ERROR", 
                 pdMS_TO_TICKS(xTaskGetTickCount()) - dtc_devices[i]->prevTime);
+
+            strcat(output_buffer, temp);
         }
-        printf("========================\n");
+        strcat(output_buffer, "===============================================\n");
+
+        printf(output_buffer);
 
     }
 
@@ -684,6 +699,8 @@ void app_main(void)
     
     // Initialize UART
     uart_init();
+    twai_init();
+    DTC_Init(pdTICKS_TO_MS(xTaskGetTickCount()));
     
     // Create mutex for character sharing between tasks
     char_mutex = xSemaphoreCreateMutex();
@@ -694,6 +711,12 @@ void app_main(void)
     
     // Create tasks with error checking
     BaseType_t result;
+
+    result = xTaskCreate(twai_receive_task, "twai_rx", 4096, NULL, 5, NULL);
+    if (result != pdPASS) {
+        ESP_LOGE("APP", "Failed to create twai_receive_task");
+        return;
+    }
     
     result = xTaskCreate(uart_event_task, "uart_event_task", 4096, NULL, 10, NULL);
     if (result != pdPASS) {
