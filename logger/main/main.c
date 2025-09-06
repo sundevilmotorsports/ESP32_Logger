@@ -9,6 +9,8 @@
 #include "esp_freertos_hooks.h"
 #include <string.h>
 #include "dtc.h"
+#include "logger.h"
+#include "ina260.h"
 
 //TODO: Add SD card file storage
 
@@ -193,7 +195,7 @@ static QueueHandle_t rx_queue;
 // Semaphore for synchronization
 static SemaphoreHandle_t rx_sem;
 
-static void twai_init(void){
+static void can_init(void){
 
     // Create queue for received messages
     rx_queue = xQueueCreate(10, sizeof(twai_message_t));
@@ -365,7 +367,7 @@ static void process_can_message(twai_message_t *message) {
     }
 }
 
-static void twai_receive_task(void *pvParameters) {
+static void can_receive_task(void *pvParameters) {
     twai_message_t rx_msg;
     
     while (1) {
@@ -510,7 +512,7 @@ void print_cpu_usage(void) {
 }
 
 // Task that processes user input and executes commands
-void command_processor_task(void *param) {
+void uart_output_task(void *param) {
     ESP_LOGI(TAG, "Command processor task started");
     
     while (1) {
@@ -632,7 +634,7 @@ void command_processor_task(void *param) {
 }
 
 // Task that receives UART events via interrupt
-void uart_event_task(void *pvParameters) {
+void uart_input_task(void *pvParameters) {
     uart_event_t event;
     uint8_t data[RD_BUF_SIZE];
     
@@ -693,14 +695,91 @@ void dtc_task(void *pvParameters) {
 }
 
 
+void logBuffer_task(void *pvParamaters){
+    
+    while(1){
+        // //Log Analog Sensor Data
+        // loggerEmplaceU16(logBuffer, F_BRAKEPRESSURE, fBrakePress.value);
+        // loggerEmplaceU16(logBuffer, R_BRAKEPRESSURE, rBrakePress.value);
+        // loggerEmplaceU16(logBuffer, STEERING, steer.value);
+        // loggerEmplaceU16(logBuffer, FLSHOCK, flShock.value);
+        // loggerEmplaceU16(logBuffer, FRSHOCK, frShock.value);
+        // loggerEmplaceU16(logBuffer, RRSHOCK, rrShock.value);
+        // loggerEmplaceU16(logBuffer, RLSHOCK, rlShock.value);
+
+        // //Report Battery Current and Voltage
+        loggerEmplaceU16(logBuffer, CURRENT, getCurrent());
+        loggerEmplaceU16(logBuffer, BATTERY, getVoltage());
+
+        //Report IMU Data
+        loggerEmplaceU32(logBuffer, IMU_X_ACCEL, xAccel);
+        loggerEmplaceU32(logBuffer, IMU_Y_ACCEL, yAccel);
+        loggerEmplaceU32(logBuffer, IMU_Z_ACCEL, zAccel);
+
+        loggerEmplaceU32(logBuffer, IMU_X_GYRO, xGyro);
+        loggerEmplaceU32(logBuffer, IMU_Y_GYRO, yGyro);
+        loggerEmplaceU32(logBuffer, IMU_Z_GYRO, zGyro);
+
+        //Report Wheel Board Sensor Data
+        loggerEmplaceU16(logBuffer, FLW_AMB, flw.ambTemp);
+        loggerEmplaceU16(logBuffer, FLW_OBJ, flw.objTemp);
+        loggerEmplaceU16(logBuffer, FLW_RPM, flw.rpm);
+
+        loggerEmplaceU16(logBuffer, FRW_AMB, frw.ambTemp);
+        loggerEmplaceU16(logBuffer, FRW_OBJ, frw.objTemp);
+        loggerEmplaceU16(logBuffer, FRW_RPM, frw.rpm);
+
+        loggerEmplaceU16(logBuffer, RRW_AMB, rrw.ambTemp);
+        loggerEmplaceU16(logBuffer, RRW_OBJ, rrw.objTemp);
+        loggerEmplaceU16(logBuffer, RRW_RPM, rrw.rpm);
+
+        loggerEmplaceU16(logBuffer, RLW_AMB, rlw.ambTemp);
+        loggerEmplaceU16(logBuffer, RLW_OBJ, rlw.objTemp);
+        loggerEmplaceU16(logBuffer, RLW_RPM, rlw.rpm);
+
+        //Report String Gauge Data
+        loggerEmplaceU16(logBuffer, FR_SG, frsg);
+        loggerEmplaceU16(logBuffer, FL_SG, flsg);
+        loggerEmplaceU16(logBuffer, RR_SG, rrsg);
+        loggerEmplaceU16(logBuffer, RL_SG, rlsg);
+
+        //Report Brakes and Throttle
+        loggerEmplaceU16(logBuffer, BRAKE_FLUID, brakeFluid);
+        loggerEmplaceU16(logBuffer, THROTTLE_LOAD, throttleLoad);
+        loggerEmplaceU16(logBuffer, BRAKE_LOAD, brakeLoad);
+
+        //Report ECU Data
+        loggerEmplaceU16(logBuffer, DRIVEN_WSPD, driven_wspd);
+        loggerEmplaceU16(logBuffer, OIL_PSR, oilPress);
+        logBuffer[TPS] = tps;
+        logBuffer[ECT] = ect;
+        logBuffer[APS] = aps;
+
+        //Report DTC Data
+        logBuffer[DTC_FLW]  = dtc_devices[flWheelBoard_DTC]->errState;
+        logBuffer[DTC_FRW]  = dtc_devices[frWheelBoard_DTC]->errState;
+        logBuffer[DTC_RRW]  = dtc_devices[rrWheelBoard_DTC]->errState;
+        logBuffer[DTC_RLW]  = dtc_devices[rlWheelBoard_DTC]->errState;
+        logBuffer[DTC_FLSG] = dtc_devices[flStrainGauge_DTC]->errState;
+        logBuffer[DTC_FRSG] = dtc_devices[frStrainGauge_DTC]->errState;
+        logBuffer[DTC_RLSG] = dtc_devices[flStrainGauge_DTC]->errState;
+        logBuffer[DTC_RRSG] = dtc_devices[rrStrainGauge_DTC]->errState;
+        logBuffer[DTC_IMU]  = dtc_devices[imu_DTC]->errState;
+        logBuffer[GPS_0_]   = dtc_devices[gps_0_DTC]->errState;
+        logBuffer[GPS_1_]   = dtc_devices[gps_1_DTC]->errState;
+
+    }
+}
+
 void app_main(void)
 {
     ESP_LOGI(TAG, "Starting ESP32 UART Command Application");
     
     // Initialize UART
     uart_init();
-    twai_init();
+    can_init();
     DTC_Init(pdTICKS_TO_MS(xTaskGetTickCount()));
+    i2c_master_init();
     
     // Create mutex for character sharing between tasks
     char_mutex = xSemaphoreCreateMutex();
@@ -712,21 +791,21 @@ void app_main(void)
     // Create tasks with error checking
     BaseType_t result;
 
-    result = xTaskCreate(twai_receive_task, "twai_rx", 4096, NULL, 5, NULL);
+    result = xTaskCreate(can_receive_task, "can_rx", 4096, NULL, 5, NULL);
     if (result != pdPASS) {
-        ESP_LOGE("APP", "Failed to create twai_receive_task");
+        ESP_LOGE("APP", "Failed to create can_receive_task");
         return;
     }
     
-    result = xTaskCreate(uart_event_task, "uart_event_task", 4096, NULL, 10, NULL);
+    result = xTaskCreate(uart_input_task, "uart_input", 4096, NULL, 10, NULL);
     if (result != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create uart_event_task");
+        ESP_LOGE(TAG, "Failed to create uart_input_task");
         return;
     }
     
-    result = xTaskCreate(command_processor_task, "cmd_processor", 4096, NULL, 5, NULL);
+    result = xTaskCreate(uart_output_task, "uart_output", 4096, NULL, 5, NULL);
     if (result != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create command_processor_task");
+        ESP_LOGE(TAG, "Failed to create uart_output_task");
         return;
     }
 
@@ -750,46 +829,3 @@ void app_main(void)
     }
 }
 
-
-// void app_main(void)
-// {
-
-//     // twai_init();
-//     uart_init();
-
-
-//     // // Create mutex with validation
-//     // char_mutex = xSemaphoreCreateMutex();
-//     // if (char_mutex == NULL) {
-//     //     ESP_LOGE("APP", "Failed to create mutex");
-//     //     return;
-//     // }
-
-//     // // Create tasks with error checking
-//     // BaseType_t result;
-    
-//     // result = xTaskCreate(twai_receive_task, "twai_rx", 4096, NULL, 5, NULL);
-//     // if (result != pdPASS) {
-//     //     ESP_LOGE("APP", "Failed to create twai_receive_task");
-//     //     return;
-//     // }
-    
-//     // result = xTaskCreate(uart_event_task, "uart_event_task", 4096, NULL, 12, NULL);
-//     // if (result != pdPASS) {
-//     //     ESP_LOGE("APP", "Failed to create uart_event_task");
-//     //     return;
-//     // }
-    
-//     // result = xTaskCreate(serial_report, "serial_report", 2048, NULL, 10, NULL);
-//     // if (result != pdPASS) {
-//     //     ESP_LOGE("APP", "Failed to create serial_report");
-//     //     return;
-//     // }
-
-//     while(1){
-
-//         vTaskDelay(pdMS_TO_TICKS(1000));
-
-//     }
-
-// }

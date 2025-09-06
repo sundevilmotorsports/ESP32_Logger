@@ -17,7 +17,7 @@
 extern uint32_t DTC_PREV_CHECK_TIME;
 
 typedef struct {
-	uint8_t errState; //Error State flag (1 = Error, 0 = No Error)
+	uint8_t errState; //Error State flag (1 = No Error, 0 = Error)
 	uint8_t DTC_Idx; // Index of the DTC Code in the Array
 	
     //Corresponds to the 32 addresses in the DTC Code Handler

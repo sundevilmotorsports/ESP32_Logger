@@ -1,0 +1,20 @@
+/*
+ * logger.h
+ *
+ *  Created on: Mar 23, 2024
+ *      Author: joshl
+ *  
+ *  Copied on: Sept 6, 2025
+ *       Copier: Alex R
+ */
+
+#ifndef INC_LOGGER_H_
+#define INC_LOGGER_H_
+
+#include <stdint.h>
+#include <stddef.h>
+
+void loggerEmplaceU16(uint8_t* buffer, size_t addr, uint16_t data);
+void loggerEmplaceU32(uint8_t* buffer, size_t addr, uint32_t data);
+void loggerEmplaceCAN(uint8_t* buffer, size_t addr, uint8_t* msg);
+#endif /* INC_LOGGER_H_ */

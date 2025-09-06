@@ -100,10 +100,10 @@ void DTC_CAN_Update_Error_State(can_dtc *dtc, uint64_t current_time) {
     
     // Error if current response is much larger than recent maximum
     if (current_time > (max_response + dtc->threshold)) {
-        dtc->errState = 1;
+        dtc->errState = 0;
     }
     else {
-        dtc->errState = 0; // Clear error state if within threshold
+        dtc->errState = 1; // Clear error state if within threshold
     }
 
     return;
