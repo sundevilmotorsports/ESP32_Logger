@@ -11,7 +11,7 @@
 #include "dtc.h"
 #include "logger.h"
 #include "ina260.h"
-
+#include "adc.h"
 //TODO: Add SD card file storage
 
 
@@ -438,18 +438,23 @@ void print_dtc_info(void *pvParameters) {
 
 
         printf("\033[2J\033[H"); // Clear screen and move cursor to top
-        sprintf(output_buffer, "\n=== DTC Information ===\n\n%-20s %-10s %10s\n===============================================\n", "Device", "Status", "Time (ms)");
-        for (int i = 0; i < DTC_COUNT; i++) {
-            sprintf(temp, "%-20s %-10s %10llu\n", 
-                dtc_device_names[i], 
-                dtc_devices[i]->errState ? "OK" : "ERROR", 
-                pdMS_TO_TICKS(xTaskGetTickCount()) - dtc_devices[i]->prevTime);
+        size_t offset = snprintf(output_buffer, sizeof(output_buffer),
+            "\n=== DTC Information ===\n\n%-20s %-10s %10s\n===============================================\n",
+            "Device", "Status", "Time (ms)");
 
-            strcat(output_buffer, temp);
+        for (int i = 0; i < DTC_COUNT; i++) {
+            int written = snprintf(temp, sizeof(temp), "%-20s %-10s %10llu\n",
+                dtc_device_names[i] ? dtc_device_names[i] : "UNKNOWN",
+                dtc_devices[i] ? (dtc_devices[i]->errState ? "OK" : "ERROR") : "N/A",
+                dtc_devices[i] ? (pdMS_TO_TICKS(xTaskGetTickCount()) - dtc_devices[i]->prevTime) : 0);
+
+            if (offset + written < sizeof(output_buffer)) {
+                strncat(output_buffer, temp, sizeof(output_buffer) - offset - 1);
+                offset += written;
+            }
         }
         strcat(output_buffer, "===============================================\n");
-
-        printf(output_buffer);
+        printf("%s", output_buffer);
 
     }
 
@@ -489,7 +494,7 @@ void print_cpu_usage(void) {
         
         for (x = 0; x < uxArraySize; x++) {
             if (strstr(pxTaskStatusArray[x].pcTaskName, "IDLE") != NULL) {
-                idle_time += pxTaskStatusArray[x].ulRunTimeCounter;
+                idle_time = pxTaskStatusArray[x].ulRunTimeCounter;
             }
             
             // Calculate percentage with safety check
@@ -581,7 +586,7 @@ void uart_output_task(void *param) {
                         vTaskDelay(pdMS_TO_TICKS(500));
                         
                         dtc_info_running = true;
-                        BaseType_t result = xTaskCreate(print_dtc_info, "dtc_info_display", 2048, NULL, 7, &dtc_info_task_handle);
+                        BaseType_t result = xTaskCreate(print_dtc_info, "dtc_info_display", 4096, NULL, 7, &dtc_info_task_handle);
                         if (result != pdPASS) {
                             ESP_LOGE(TAG, "Failed to create DTC info task");
                             dtc_info_running = false;
@@ -695,17 +700,24 @@ void dtc_task(void *pvParameters) {
 }
 
 
+
+
 void logBuffer_task(void *pvParamaters){
     
     while(1){
+        //Start Analog Listening
+        adc_enable();
+
         // //Log Analog Sensor Data
-        // loggerEmplaceU16(logBuffer, F_BRAKEPRESSURE, fBrakePress.value);
-        // loggerEmplaceU16(logBuffer, R_BRAKEPRESSURE, rBrakePress.value);
-        // loggerEmplaceU16(logBuffer, STEERING, steer.value);
-        // loggerEmplaceU16(logBuffer, FLSHOCK, flShock.value);
-        // loggerEmplaceU16(logBuffer, FRSHOCK, frShock.value);
-        // loggerEmplaceU16(logBuffer, RRSHOCK, rrShock.value);
-        // loggerEmplaceU16(logBuffer, RLSHOCK, rlShock.value);
+        loggerEmplaceU16(logBuffer, F_BRAKEPRESSURE, getAnalog(ADC_FBP));
+        loggerEmplaceU16(logBuffer, R_BRAKEPRESSURE, getAnalog(ADC_RBP));
+        loggerEmplaceU16(logBuffer, STEERING, getAnalog(ADC_STP));
+        loggerEmplaceU16(logBuffer, FLSHOCK, getAnalog(ADC_FLS));
+        loggerEmplaceU16(logBuffer, FRSHOCK, getAnalog(ADC_FRS));
+        loggerEmplaceU16(logBuffer, RRSHOCK, getAnalog(ADC_RRS));
+        loggerEmplaceU16(logBuffer, RLSHOCK, getAnalog(ADC_RLS));
+
+        adc_disable();
 
         // //Report Battery Current and Voltage
         loggerEmplaceU16(logBuffer, CURRENT, getCurrent());
@@ -780,6 +792,7 @@ void app_main(void)
     can_init();
     DTC_Init(pdTICKS_TO_MS(xTaskGetTickCount()));
     i2c_master_init();
+    adcInit();
     
     // Create mutex for character sharing between tasks
     char_mutex = xSemaphoreCreateMutex();

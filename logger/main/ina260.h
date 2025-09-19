@@ -52,6 +52,9 @@ bool ina260_write_config(const ina260_t *dev, uint16_t config);
 // Read configuration register
 bool ina260_read_config(const ina260_t *dev, uint16_t *config);
 
+uint16_t getVoltage(void);
+uint16_t getCurrent(void);
+
 #ifdef __cplusplus
 }
 #endif
