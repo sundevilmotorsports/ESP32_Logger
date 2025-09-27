@@ -163,35 +163,6 @@ static void neo_uart_task(void *pvParameters) {
     }
 }
 
-void gnss_simple_test(void) {
-    ESP_LOGI(TAG, "Starting simple GPS polling test...");
-
-    const uart_config_t uart_config = {
-        .baud_rate = 9600,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-    };
-
-    uart_param_config(NEO_UART_PORT, &uart_config);
-    uart_set_pin(NEO_UART_PORT, NEO_TX_PIN, NEO_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-
-    char data[128];
-    int len;
-
-    ESP_LOGI(TAG, "Listening for GPS data (polling mode)...");
-    for (int i = 0; i < 100; i++) { // Try for 10 seconds
-        len = uart_read_bytes(NEO_UART_PORT, data, sizeof(data) - 1, 100 / portTICK_PERIOD_MS);
-        if (len > 0) {
-            data[len] = '\0';
-            ESP_LOGI(TAG, "GPS Data: %s", data);
-        }
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-    ESP_LOGI(TAG, "GPS polling test completed");
-}
-
 void gnss_init(void) {
     neo_uart_init();
 }
