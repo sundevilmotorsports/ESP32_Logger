@@ -19,7 +19,7 @@ static uint8_t *dma_buffer = NULL;
 
 GNSS_StateHandle GNSS_Handle = {0};
 
-static void neo_uart_init(void) {
+void gnss_init(void) {
     const uart_config_t uart_config = {
         .baud_rate = 38400,
         .data_bits = UART_DATA_8_BITS,
@@ -54,6 +54,101 @@ static void neo_uart_init(void) {
     ESP_LOGI(TAG, "GPS UART initialization complete");
 }
 
+static bool parse_gngga(const char* sentence, GNSS_StateHandle* gps) {
+    // $GNGGA,hhmmss.ss,ddmm.mmmmm,N/S,dddmm.mmmmm,E/W,q,nn,h.h,a.a,M,g.g,M,d.d,nnnn*hh
+    char time_str[16] = {0};
+    char lat_str[16] = {0}, lat_ns = 0;
+    char lon_str[16] = {0}, lon_ew = 0;
+    int quality = 0, satellites = 0;
+    float hdop = 0.0, altitude = 0.0;
+
+    int parsed = sscanf(sentence, "$GNGGA,%[^,],%[^,],%c,%[^,],%c,%d,%d,%f,%f,M",
+                       time_str, lat_str, &lat_ns, lon_str, &lon_ew,
+                       &quality, &satellites, &hdop, &altitude);
+
+    if (parsed >= 6) {
+        gps->fixType = quality;
+
+        // Parse time (HHMMSS format)
+        if (strlen(time_str) >= 6) {
+            gps->hour = (time_str[0] - '0') * 10 + (time_str[1] - '0');
+            gps->min = (time_str[2] - '0') * 10 + (time_str[3] - '0');
+            gps->sec = (time_str[4] - '0') * 10 + (time_str[5] - '0');
+        }
+
+        // Parse latitude (DDMM.MMMMM format)
+        if (strlen(lat_str) > 0 && lat_ns != 0) {
+            float lat_deg = atof(lat_str);
+            int degrees = (int)(lat_deg / 100);
+            float minutes = lat_deg - (degrees * 100);
+            gps->fLat = degrees + (minutes / 60.0);
+            if (lat_ns == 'S') gps->fLat = -gps->fLat;
+            gps->lat = (signed long)(gps->fLat * 10000000); // Convert to micro-degrees
+        }
+
+        // Parse longitude (DDDMM.MMMMM format)
+        if (strlen(lon_str) > 0 && lon_ew != 0) {
+            float lon_deg = atof(lon_str);
+            int degrees = (int)(lon_deg / 100);
+            float minutes = lon_deg - (degrees * 100);
+            gps->fLon = degrees + (minutes / 60.0);
+            if (lon_ew == 'W') gps->fLon = -gps->fLon;
+            gps->lon = (signed long)(gps->fLon * 10000000); // Convert to micro-degrees
+        }
+
+        gps->hMSL = altitude;
+
+        ESP_LOGI(TAG, "GGA: Fix=%d, Sats=%d, Lat=%.6f, Lon=%.6f, Alt=%.1fm",
+                 quality, satellites, gps->fLat, gps->fLon, altitude);
+        return true;
+    }
+    return false;
+}
+
+static bool parse_gnrmc(const char* sentence, GNSS_StateHandle* gps) {
+    // $GNRMC,hhmmss.ss,A/V,ddmm.mmmmm,N/S,dddmm.mmmmm,E/W,s.s,c.c,ddmmyy,d.d,E/W,m*hh
+    char time_str[16] = {0};
+    char status = 0;
+    char lat_str[16] = {0}, lat_ns = 0;
+    char lon_str[16] = {0}, lon_ew = 0;
+    float speed = 0.0, course = 0.0;
+    char date_str[16] = {0};
+
+    int parsed = sscanf(sentence, "$GNRMC,%[^,],%c,%[^,],%c,%[^,],%c,%f,%f,%[^,]",
+                       time_str, &status, lat_str, &lat_ns, lon_str, &lon_ew,
+                       &speed, &course, date_str);
+
+    if (parsed >= 9) {
+        // Parse date (DDMMYY format)
+        if (strlen(date_str) >= 6) {
+            gps->day = (date_str[0] - '0') * 10 + (date_str[1] - '0');
+            gps->month = (date_str[2] - '0') * 10 + (date_str[3] - '0');
+            gps->year = 2000 + (date_str[4] - '0') * 10 + (date_str[5] - '0');
+        }
+
+        gps->gSpeed = (signed long)(speed * 1.151); // Convert knots to mph
+        gps->headMot = course;
+
+        ESP_LOGI(TAG, "RMC: Status=%c, Speed=%.1fkn, Course=%.1f°, Date=%02d/%02d/%04d",
+                 status, speed, course, gps->day, gps->month, gps->year);
+        return (status == 'A'); // Return true if fix is active
+    }
+    return false;
+}
+
+static void parse_gsv_satellites(const char* sentence) {
+    // $GPGSV,total_msgs,msg_num,total_sats,sat1_prn,sat1_elev,sat1_azim,sat1_snr,...*hh
+    int total_msgs, msg_num, total_sats;
+
+    int parsed = sscanf(sentence, "$%*2cGSV,%d,%d,%d", &total_msgs, &msg_num, &total_sats);
+
+    if (parsed == 3) {
+        char constellation[3] = {0};
+        strncpy(constellation, sentence + 1, 2);
+        ESP_LOGI(TAG, "GSV %s: Total satellites in view: %d", constellation, total_sats);
+    }
+}
+
 static void process_nmea_sentence(const char* sentence, size_t len) {
     if (!sentence || len == 0) {
         ESP_LOGW(TAG, "Invalid NMEA sentence: null or empty");
@@ -74,8 +169,28 @@ static void process_nmea_sentence(const char* sentence, size_t len) {
 
     // Validate NMEA format (should start with $)
     if (len > 0 && nmea_line[0] == '$') {
-        ESP_LOGI(TAG, "GPS: %s", nmea_line);
-        printf("GPS: %s\n", nmea_line);
+        ESP_LOGD(TAG, "GPS: %s", nmea_line);
+
+        if (strncmp(nmea_line, "$GNGGA", 6) == 0) {
+            parse_gngga(nmea_line, &GNSS_Handle);
+        } else if (strncmp(nmea_line, "$GNRMC", 6) == 0) {
+            bool fix_active = parse_gnrmc(nmea_line, &GNSS_Handle);
+            if (fix_active) {
+                ESP_LOGI(TAG, "gps fix");
+                ESP_LOGI(TAG, "Location: %.6f°, %.6f°", GNSS_Handle.fLat, GNSS_Handle.fLon);
+                ESP_LOGI(TAG, "Time: %02d:%02d:%02d Date: %02d/%02d/%04d",
+                         GNSS_Handle.hour, GNSS_Handle.min, GNSS_Handle.sec,
+                         GNSS_Handle.day, GNSS_Handle.month, GNSS_Handle.year);
+            }
+        } else if (strstr(nmea_line, "GSV") != NULL) {
+            parse_gsv_satellites(nmea_line);
+        } else if (strncmp(nmea_line, "$GNGSA", 6) == 0) {
+            ESP_LOGD(TAG, "GSA: DOP and active satellites info");
+        } else if (strncmp(nmea_line, "$GNVTG", 6) == 0) {
+            ESP_LOGD(TAG, "VTG: Track made good and ground speed");
+        } else if (strncmp(nmea_line, "$GNGLL", 6) == 0) {
+            ESP_LOGD(TAG, "GLL: Geographic position - latitude/longitude");
+        }
     } else {
         ESP_LOGD(TAG, "Non-NMEA data (%d bytes): %.*s", len, (int)len, nmea_line);
     }
@@ -161,10 +276,6 @@ static void neo_uart_task(void *pvParameters) {
             }
         }
     }
-}
-
-void gnss_init(void) {
-    neo_uart_init();
 }
 
 void gnss_start_task(void) {

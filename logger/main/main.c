@@ -789,10 +789,10 @@ void app_main(void)
     
     // Initialize UART
     uart_init();
-    // can_init();
-    // DTC_Init(pdTICKS_TO_MS(xTaskGetTickCount()));
-    // i2c_master_init();
-    // adcInit();
+    can_init();
+    DTC_Init(pdTICKS_TO_MS(xTaskGetTickCount()));
+    i2c_master_init();
+    adcInit();
     
     // Create mutex for character sharing between tasks
     char_mutex = xSemaphoreCreateMutex();
@@ -802,32 +802,32 @@ void app_main(void)
     }
     
     // Create tasks with error checking
-    // BaseType_t result;
-    //
-    // result = xTaskCreate(can_receive_task, "can_rx", 4096, NULL, 5, NULL);
-    // if (result != pdPASS) {
-    //     ESP_LOGE("APP", "Failed to create can_receive_task");
-    //     return;
-    // }
-    //
-    // result = xTaskCreate(uart_input_task, "uart_input", 4096, NULL, 10, NULL);
-    // if (result != pdPASS) {
-    //     ESP_LOGE(TAG, "Failed to create uart_input_task");
-    //     return;
-    // }
-    //
-    // result = xTaskCreate(uart_output_task, "uart_output", 4096, NULL, 5, NULL);
-    // if (result != pdPASS) {
-    //     ESP_LOGE(TAG, "Failed to create uart_output_task");
-    //     return;
-    // }
-    //
-    //     // Add DTC error checking task
-    // result = xTaskCreate(dtc_task, "dtc_check", 2048, NULL, 6, NULL);
-    // if (result != pdPASS) {
-    //     ESP_LOGE(TAG, "Failed to create dtc_task");
-    //     return;
-    // }
+    BaseType_t result;
+
+    result = xTaskCreate(can_receive_task, "can_rx", 4096, NULL, 5, NULL);
+    if (result != pdPASS) {
+        ESP_LOGE("APP", "Failed to create can_receive_task");
+        return;
+    }
+
+    result = xTaskCreate(uart_input_task, "uart_input", 4096, NULL, 10, NULL);
+    if (result != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create uart_input_task");
+        return;
+    }
+
+    result = xTaskCreate(uart_output_task, "uart_output", 4096, NULL, 5, NULL);
+    if (result != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create uart_output_task");
+        return;
+    }
+
+    // Add DTC error checking task
+    result = xTaskCreate(dtc_task, "dtc_check", 2048, NULL, 6, NULL);
+    if (result != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create dtc_task");
+        return;
+    }
 
     gnss_init();
 
