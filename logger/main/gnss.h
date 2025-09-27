@@ -44,3 +44,6 @@ extern GNSS_StateHandle GNSS_Handle;
 void gnss_init(void);
 void gnss_start_task(void);
 void gnss_stop(void);
+// Diagnostic functions kept for future troubleshooting if needed
+// void gnss_comprehensive_test(void);
+// void gnss_simple_test(void);
