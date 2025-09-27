@@ -1,4 +1,9 @@
+#pragma once
+#include <stdint.h>
 
+// DMA buffer configuration
+#define GNSS_DMA_BUF_SIZE 2048
+#define GNSS_PATTERN_CHR '\n'  // NMEA sentences end with \n
 
 typedef struct
 {
@@ -34,3 +39,8 @@ typedef struct
 }GNSS_StateHandle;
 
 extern GNSS_StateHandle GNSS_Handle;
+
+// Function declarations
+void gnss_init(void);
+void gnss_start_task(void);
+void gnss_stop(void);
