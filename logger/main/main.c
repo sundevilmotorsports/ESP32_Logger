@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include "driver/gpio.h"
-#include "driver/twai.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -13,8 +12,9 @@
 #include "ina260.h"
 #include "adc.h"
 #include "gnss.h"
+#include "can.h"
 #include "esp_twai.h"
-#include "esp_twai_onchip.h"
+
 //TODO: Add SD card file storage
 
 
@@ -192,43 +192,20 @@ uint16_t oilPress = 0, driven_wspd = 0;
 uint8_t ect = 0, tps = 0, aps = 0, shift0 = 0, shift1 = 0, shift2 = 0;
 
 
-// Queue to store received messages
-static QueueHandle_t rx_queue;
 
-// Semaphore for synchronization
-static SemaphoreHandle_t rx_sem;
+static void process_can_message(twai_frame_t *message) {
 
-twai_node_handle_t node_hdl = NULL;
-
-static void can_init(void){
-
-    // Create queue for received messages
-    rx_queue = xQueueCreate(10, sizeof(twai_message_t));
-    
-    // Create semaphore for RX notifications
-    rx_sem = xSemaphoreCreateBinary();
-
-    twai_onchip_node_config_t node_config = {
-        .io_cfg.tx = CAN_CTX,
-        .io_cfg.rx = CAN_RTX,
-        .bit_timing.bitrate = 1000000,
-        .tx_queue_depth = 5,
-    };
-
-    ESP_ERROR_CHECK(twai_new_node_onchip(&node_config, &node_hdl));
-    ESP_ERROR_CHECK(twai_node_enable(node_hdl));
-}
-
-static void process_can_message(twai_message_t *message) {
-    switch(message->identifier) {
+    uint8_t data[8];
+    memcpy(data, message->buffer, message->header.dlc);
+    switch(message->header.id) {
         case 0x35F:
-            drs = message->data[0];
+            drs = data[0];
             break;
             
         case 0x360:
             //IMU Data
-            xAccel = message->data[0] << 24 | message->data[1] << 16 | message->data[2] << 8 | message->data[3];
-            yAccel = message->data[4] << 24 | message->data[5] << 16 | message->data[6] << 8 | message->data[7];
+            xAccel = data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3];
+            yAccel = data[4] << 24 | data[5] << 16 | data[6] << 8 | data[7];
             imuCount++;
             
             //IMU DTC Check
@@ -236,8 +213,8 @@ static void process_can_message(twai_message_t *message) {
             
         case 0x361:
             //IMU Data
-            zAccel = message->data[0] << 24 | message->data[1] << 16 | message->data[2] << 8 | message->data[3];
-            xGyro = message->data[4] << 24 | message->data[5] << 16 | message->data[6] << 8 | message->data[7];
+            zAccel = data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3];
+            xGyro = data[4] << 24 | data[5] << 16 | data[6] << 8 | data[7];
             imuCount++;
 
             //IMU DTC Check
@@ -245,8 +222,8 @@ static void process_can_message(twai_message_t *message) {
             
         case 0x362:
             //IMU Data
-            yGyro = message->data[0] << 24 | message->data[1] << 16 | message->data[2] << 8 | message->data[3];
-            zGyro = message->data[4] << 24 | message->data[5] << 16 | message->data[6] << 8 | message->data[7];
+            yGyro = data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3];
+            zGyro = data[4] << 24 | data[5] << 16 | data[6] << 8 | data[7];
             imuCount++;
 
             //IMU DTC Response Update
@@ -255,9 +232,9 @@ static void process_can_message(twai_message_t *message) {
             
         case 0x363:
             //Front Left Wheel Board
-            flw.rpm = message->data[0] << 8 | message->data[1];
-            flw.objTemp = message->data[2] << 8 | message->data[3];
-            flw.ambTemp = message->data[4] << 8 | message->data[5];
+            flw.rpm = data[0] << 8 | data[1];
+            flw.objTemp = data[2] << 8 | data[3];
+            flw.ambTemp = data[4] << 8 | data[5];
 
             //DTC Response Update
             DTC_CAN_Response_Measurement(dtc_devices[flWheelBoard_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
@@ -265,9 +242,9 @@ static void process_can_message(twai_message_t *message) {
             
         case 0x364:
             //Front Right Wheel Board
-            frw.rpm = message->data[0] << 8 | message->data[1];
-            frw.objTemp = message->data[2] << 8 | message->data[3];
-            frw.ambTemp = message->data[4] << 8 | message->data[5];
+            frw.rpm = data[0] << 8 | data[1];
+            frw.objTemp = data[2] << 8 | data[3];
+            frw.ambTemp = data[4] << 8 | data[5];
 
             //DTC Response Update
             DTC_CAN_Response_Measurement(dtc_devices[frWheelBoard_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
@@ -275,9 +252,9 @@ static void process_can_message(twai_message_t *message) {
             
         case 0x365:
             //Rear Right Wheel Board
-            rrw.rpm = message->data[0] << 8 | message->data[1];
-            rrw.objTemp = message->data[2] << 8 | message->data[3];
-            rrw.ambTemp = message->data[4] << 8 | message->data[5];
+            rrw.rpm = data[0] << 8 | data[1];
+            rrw.objTemp = data[2] << 8 | data[3];
+            rrw.ambTemp = data[4] << 8 | data[5];
 
             //DTC Response Update
             DTC_CAN_Response_Measurement(dtc_devices[rrWheelBoard_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
@@ -285,9 +262,9 @@ static void process_can_message(twai_message_t *message) {
             
         case 0x366:
             //Rear Left Wheel Board
-            rlw.rpm = message->data[0] << 8 | message->data[1];
-            rlw.objTemp = message->data[2] << 8 | message->data[3];
-            rlw.ambTemp = message->data[4] << 8 | message->data[5];
+            rlw.rpm = data[0] << 8 | data[1];
+            rlw.objTemp = data[2] << 8 | data[3];
+            rlw.ambTemp = data[4] << 8 | data[5];
 
             //DTC Response Update
             DTC_CAN_Response_Measurement(dtc_devices[rlWheelBoard_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
@@ -295,7 +272,7 @@ static void process_can_message(twai_message_t *message) {
             
         case 0x4e2:
             //Front Left String Gauge
-            flsg = message->data[0] << 8 | message->data[1];
+            flsg = data[0] << 8 | data[1];
 
             //String Gauge DTC Check
             DTC_CAN_Response_Measurement(dtc_devices[flStrainGauge_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
@@ -304,7 +281,7 @@ static void process_can_message(twai_message_t *message) {
             
         case 0x4e3:
             //Front Right String Gauge
-            frsg = message->data[0] << 8 | message->data[1];
+            frsg = data[0] << 8 | data[1];
 
             //String Gauge DTC Check
             DTC_CAN_Response_Measurement(dtc_devices[frStrainGauge_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
@@ -312,7 +289,7 @@ static void process_can_message(twai_message_t *message) {
             
         case 0x4e4:
             //Rear Right String Gauge
-            rrsg = message->data[0] << 8 | message->data[1];
+            rrsg = data[0] << 8 | data[1];
 
             //String Gauge DTC Check
             DTC_CAN_Response_Measurement(dtc_devices[rrStrainGauge_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
@@ -320,7 +297,7 @@ static void process_can_message(twai_message_t *message) {
             
         case 0x4e5:
             //Rear Left String Gauge
-            rlsg = message->data[0] << 8 | message->data[1];
+            rlsg = data[0] << 8 | data[1];
 
             //String Gauge DTC Check
             DTC_CAN_Response_Measurement(dtc_devices[rlStrainGauge_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
@@ -328,32 +305,32 @@ static void process_can_message(twai_message_t *message) {
             
         case 0x3e8:
             //Engine CAN Stream 2
-            switch(message->data[0]){
+            switch(data[0]){
                 //Frame 1
                 case 0x0:
                     // engine_speed = message->data[1] << 8 | message->data[2];
-                    ect = message->data[3];
+                    ect = data[3];
                     // oilTemp = message->data[4];
-                    oilPress = message->data[5] << 8 | message->data[6];
+                    oilPress = data[5] << 8 | data[6];
                     //TODO: Could also add Park/Neutral Status (Stored on message->data[7])
                     break;
 
                 case 0x1:
-                    tps = message->data[2];
-                    driven_wspd = message->data[4] << 8 | message->data[5];
+                    tps = data[2];
+                    driven_wspd = data[4] << 8 | data[5];
                     break;
                     
                 case 0x2:
-                    aps = message->data[1];
+                    aps = data[1];
                     break;
             }
             break;
 
         case 0x40:
             // Shifter Data
-            shift0 = message->data[0];
-            shift1 = message->data[1];
-            shift2 = message->data[2];
+            shift0 = data[0];
+            shift1 = data[1];
+            shift2 = data[2];
             if((shift1 != 1) | (shift2 != 1)) {
                 TXDAT[1] = shift1;
                 TXDAT[2] = shift2;
@@ -363,38 +340,6 @@ static void process_can_message(twai_message_t *message) {
     }
 }
 
-static void can_receive_task(void *pvParameters) {
-    twai_message_t rx_msg;
-    
-    while (1) {
-        // Use timeout instead of blocking indefinitely
-        esp_err_t result = twai_receive(&rx_msg, pdMS_TO_TICKS(100)); // 100ms timeout
-        
-        if (result == ESP_OK) {
-            // Process the received message
-            process_can_message(&rx_msg);
-            
-            // Optional: Add to queue for other tasks
-            if (rx_queue != NULL) {
-                xQueueSend(rx_queue, &rx_msg, 0);
-            }
-            
-            // Give semaphore to notify other tasks
-            if (rx_sem != NULL) {
-                xSemaphoreGive(rx_sem);
-            }
-        } else if (result == ESP_ERR_TIMEOUT) {
-            // Timeout occurred - this is normal, just continue
-            // This allows the watchdog to be reset
-        } else {
-            // Handle other errors
-            ESP_LOGW(TAG, "TWAI receive error: %s", esp_err_to_name(result));
-        }
-        
-        // Small delay to prevent task from consuming too much CPU
-        vTaskDelay(pdMS_TO_TICKS(1));
-    }
-}
 
 
 static void uart_init(void){
@@ -784,10 +729,11 @@ void app_main(void)
     
     // Initialize UART
     uart_init();
-    can_init();
     DTC_Init(pdTICKS_TO_MS(xTaskGetTickCount()));
     i2c_master_init();
     adcInit();
+    can_init(process_can_message);
+
     
     // Create mutex for character sharing between tasks
     char_mutex = xSemaphoreCreateMutex();
@@ -798,12 +744,6 @@ void app_main(void)
     
     // Create tasks with error checking
     BaseType_t result;
-
-    result = xTaskCreate(can_receive_task, "can_rx", 4096, NULL, 5, NULL);
-    if (result != pdPASS) {
-        ESP_LOGE("APP", "Failed to create can_receive_task");
-        return;
-    }
 
     result = xTaskCreate(uart_input_task, "uart_input", 4096, NULL, 10, NULL);
     if (result != pdPASS) {
