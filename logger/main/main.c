@@ -12,6 +12,8 @@
 #include "logger.h"
 #include "ina260.h"
 #include "adc.h"
+#include "esp_twai.h"
+#include "esp_twai_onchip.h"
 //TODO: Add SD card file storage
 
 
@@ -195,6 +197,8 @@ static QueueHandle_t rx_queue;
 // Semaphore for synchronization
 static SemaphoreHandle_t rx_sem;
 
+twai_node_handle_t node_hdl = NULL;
+
 static void can_init(void){
 
     // Create queue for received messages
@@ -203,24 +207,15 @@ static void can_init(void){
     // Create semaphore for RX notifications
     rx_sem = xSemaphoreCreateBinary();
 
+    twai_onchip_node_config_t node_config = {
+        .io_cfg.tx = CAN_CTX,
+        .io_cfg.rx = CAN_RTX,
+        .bit_timing.bitrate = 1000000,
+        .tx_queue_depth = 5,
+    };
 
-    twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(CAN_CTX, CAN_RTX, TWAI_MODE_NORMAL);
-    twai_timing_config_t t_config = TWAI_TIMING_CONFIG_1MBITS();
-    twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
-
-    if(twai_driver_install(&g_config, &t_config, &f_config) == ESP_OK){
-        ESP_LOGI(TAG, "CAN Driver Installed!");
-    }else{
-        ESP_LOGI(TAG, "FAIL: CAN Driver Install");
-        return;
-    }
-
-    if(twai_start() == ESP_OK){
-        ESP_LOGI(TAG, "CAN Start Successful");
-    }else{
-        ESP_LOGI(TAG, "FAIL: CAN Start");
-    }
-
+    ESP_ERROR_CHECK(twai_new_node_onchip(&node_config, &node_hdl));
+    ESP_ERROR_CHECK(twai_node_enable(node_hdl));
 }
 
 static void process_can_message(twai_message_t *message) {
