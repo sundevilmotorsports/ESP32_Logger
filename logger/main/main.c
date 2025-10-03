@@ -12,6 +12,7 @@
 #include "logger.h"
 #include "ina260.h"
 #include "adc.h"
+#include "gnss.h"
 #include "esp_twai.h"
 #include "esp_twai_onchip.h"
 //TODO: Add SD card file storage
@@ -694,9 +695,6 @@ void dtc_task(void *pvParameters) {
     }
 }
 
-
-
-
 void logBuffer_task(void *pvParamaters){
     
     while(1){
@@ -780,6 +778,8 @@ void logBuffer_task(void *pvParamaters){
 
 void app_main(void)
 {
+    esp_log_level_set("GNSS_DMA", ESP_LOG_DEBUG);
+
     ESP_LOGI(TAG, "Starting ESP32 UART Command Application");
     
     // Initialize UART
@@ -804,32 +804,34 @@ void app_main(void)
         ESP_LOGE("APP", "Failed to create can_receive_task");
         return;
     }
-    
+
     result = xTaskCreate(uart_input_task, "uart_input", 4096, NULL, 10, NULL);
     if (result != pdPASS) {
         ESP_LOGE(TAG, "Failed to create uart_input_task");
         return;
     }
-    
+
     result = xTaskCreate(uart_output_task, "uart_output", 4096, NULL, 5, NULL);
     if (result != pdPASS) {
         ESP_LOGE(TAG, "Failed to create uart_output_task");
         return;
     }
 
-        // Add DTC error checking task
+    // Add DTC error checking task
     result = xTaskCreate(dtc_task, "dtc_check", 2048, NULL, 6, NULL);
     if (result != pdPASS) {
         ESP_LOGE(TAG, "Failed to create dtc_task");
         return;
     }
-    
+
+    gnss_init();
+
+    gnss_start_task();
+
     ESP_LOGI(TAG, "All tasks created successfully");
     
     // Show welcome message and help
     vTaskDelay(pdMS_TO_TICKS(500)); // Wait for tasks to start
-
-    
     // Main loop - keep system alive
     while(1) {
         vTaskDelay(pdMS_TO_TICKS(5000));
