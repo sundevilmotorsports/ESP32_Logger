@@ -98,12 +98,12 @@ void can_init(can_message_callback_t callback_function){
             .bitrate = BITRATE
         },
         .tx_queue_depth = 64,
-        .callbacks = {
-            .rx_done_cb = rx_done_callback,
-            .user_data = NULL
-        }
+    };
+    const twai_event_callbacks_t callbacks = {
+        .on_rx_done = can_rx_cb
     };
     ESP_ERROR_CHECK(twai_new_node_onchip(&can_config, &hfdcan));
+    ESP_ERROR_CHECK(twai_node_register_event_callbacks(hfdcan, &callbacks, NULL));
     ESP_ERROR_CHECK(twai_node_enable(hfdcan));
 
     BaseType_t result = xTaskCreate(can_receive_task, "can_rx", 4096, NULL, 5, NULL);
