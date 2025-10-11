@@ -14,6 +14,7 @@
 #include "gnss.h"
 #include "can.h"
 #include "esp_twai.h"
+#include "sdcard.h"
 
 //TODO: Add SD card file storage
 
@@ -190,6 +191,11 @@ uint8_t drs = 0;
 uint16_t brakeFluid = 0, throttleLoad = 0, brakeLoad = 0;
 uint16_t oilPress = 0, driven_wspd = 0;
 uint8_t ect = 0, tps = 0, aps = 0, shift0 = 0, shift1 = 0, shift2 = 0;
+
+// Global file handle for persistent logging
+static uint16_t log_file_number = 1;
+static bool logging_enabled = false;
+
 
 
 
@@ -640,7 +646,31 @@ void dtc_task(void *pvParameters) {
     }
 }
 
+// Fast logging function - minimal overhead
+static inline esp_err_t fast_log_buffer(void) {
+    if (log_file == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Write entire buffer at once - fastest method
+    size_t written = fwrite(logBuffer, sizeof(uint8_t), CH_COUNT, log_file);
+    
+    if (written != CH_COUNT) {
+        ESP_LOGE(TAG, "Log write failed: %zu/%d bytes", written, CH_COUNT);
+        return ESP_FAIL;
+    }
+    
+    // Only flush periodically, not every write (for performance)
+    static uint32_t write_count = 0;
+    if (++write_count % 10 == 0) {  // Flush every 10 writes
+        fflush(log_file);
+    }
+    
+    return ESP_OK;
+}
+
 void logBuffer_task(void *pvParamaters){
+    //Initialize SD Card / File System?
     
     while(1){
         //Start Analog Listening
@@ -717,6 +747,8 @@ void logBuffer_task(void *pvParamaters){
         logBuffer[DTC_IMU]  = dtc_devices[imu_DTC]->errState;
         logBuffer[GPS_0_]   = dtc_devices[gps_0_DTC]->errState;
         logBuffer[GPS_1_]   = dtc_devices[gps_1_DTC]->errState;
+
+        //Write Data to SD Card
 
     }
 }
