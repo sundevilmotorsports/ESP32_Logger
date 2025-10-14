@@ -16,7 +16,8 @@
 
 extern FILE *log_file;
 extern SemaphoreHandle_t log_file_mutex;
-extern char current_log_filename[32];
+extern char current_log_filename[64];
+extern char default_log_filename[32];
 
 // Function declarations
 void sdcard_init(void);
