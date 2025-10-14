@@ -1,6 +1,9 @@
 #include "dtc.h"
 #include <stdlib.h>
 #include "esp_log.h" 
+#include "esp_err.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 
 const char* dtc_device_names[] = {
@@ -12,6 +15,44 @@ const char* dtc_device_names[] = {
 static const char *TAG = "DTC_ERROR";
 can_dtc *dtc_devices[DTC_COUNT];
 
+// Task that runs DTC error checking at 50Hz
+void dtc_task(void *pvParameters) {
+    const TickType_t xFrequency = pdMS_TO_TICKS(20); // 50Hz = 20ms period
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+    
+    ESP_LOGI(TAG, "DTC error check task started at 50Hz");
+    
+    while (1) {
+        // Wait for the next cycle (50Hz = every 20ms)
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+        
+        // Get current time in ticks for DTC functions
+        uint32_t current_time = pdTICKS_TO_MS(xTaskGetTickCount());
+        
+        // Run the DTC error check
+        DTC_Error_Check(current_time);
+    }
+}
+
+// Optional helper function to create and start the DTC task
+esp_err_t dtc_start_task(void) {
+    BaseType_t result = xTaskCreate(
+        dtc_task,           // Function
+        "dtc_check",        // Name
+        2048,              // Stack size
+        NULL,              // Parameters
+        6,                 // Priority
+        NULL               // Task handle
+    );
+    
+    if (result != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create DTC task");
+        return ESP_FAIL;
+    }
+    
+    ESP_LOGI(TAG, "DTC task created successfully");
+    return ESP_OK;
+}
 
 /**
  * @brief Initialize a CAN DTC (Diagnostic Trouble Code) structure

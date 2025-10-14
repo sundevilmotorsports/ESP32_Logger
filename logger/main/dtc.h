@@ -1,9 +1,9 @@
 #ifndef INC_DTC_H_
 #define INC_DTC_H_
 
-#include <stdint.h>
-
-
+#include "esp_err.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 
 // DTC Bitwise Macros for Updating the Code Status
@@ -74,4 +74,9 @@ void DTC_CAN_Update_Error_State(can_dtc *dtc, uint64_t current_time);
 void DTC_CAN_Response_Measurement(can_dtc *dtc, uint64_t response_time);
 void DTC_Init(uint64_t start_time);
 void DTC_Error_Check(uint64_t current_time);
+
+void dtc_task(void *pvParameters);
+esp_err_t dtc_start_task(void);
+
+
 #endif

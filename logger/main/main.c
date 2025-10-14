@@ -15,6 +15,7 @@
 #include "can.h"
 #include "esp_twai.h"
 #include "sdcard.h"
+#include "log_chnl.h"
 
 //TODO: Add SD card file storage
 
@@ -27,132 +28,6 @@
 #define CAN_CTX 11 //GPIO 18
 #define CAN_RTX 12 //GPIO 8
 
-// Define all log channels with preprocessor macros for enum and file header generation
-#define LOG_CHANNELS \
-    X(TS) \
-    X(TS1) \
-    X(TS2) \
-    X(TS3) \
-    X(F_BRAKEPRESSURE) \
-    X(F_BRAKEPRESSURE1) \
-    X(R_BRAKEPRESSURE) \
-    X(R_BRAKEPRESSURE1) \
-    X(STEERING) \
-    X(STEERING1) \
-    X(FLSHOCK) \
-    X(FLSHOCK1) \
-    X(FRSHOCK) \
-    X(FRSHOCK1) \
-    X(RRSHOCK) \
-    X(RRSHOCK1) \
-    X(RLSHOCK) \
-    X(RLSHOCK1) \
-    X(CURRENT) \
-    X(CURRENT1) \
-    X(BATTERY) \
-    X(BATTERY1) \
-    X(IMU_X_ACCEL) \
-    X(IMU_X_ACCEL1) \
-    X(IMU_X_ACCEL2) \
-    X(IMU_X_ACCEL3) \
-    X(IMU_Y_ACCEL) \
-    X(IMU_Y_ACCEL1) \
-    X(IMU_Y_ACCEL2) \
-    X(IMU_Y_ACCEL3) \
-    X(IMU_Z_ACCEL) \
-    X(IMU_Z_ACCEL1) \
-    X(IMU_Z_ACCEL2) \
-    X(IMU_Z_ACCEL3) \
-    X(IMU_X_GYRO) \
-    X(IMU_X_GYRO1) \
-    X(IMU_X_GYRO2) \
-    X(IMU_X_GYRO3) \
-    X(IMU_Y_GYRO) \
-    X(IMU_Y_GYRO1) \
-    X(IMU_Y_GYRO2) \
-    X(IMU_Y_GYRO3) \
-    X(IMU_Z_GYRO) \
-    X(IMU_Z_GYRO1) \
-    X(IMU_Z_GYRO2) \
-    X(IMU_Z_GYRO3) \
-    X(FR_SG) \
-    X(FR_SG1) \
-    X(FL_SG) \
-    X(FL_SG1) \
-    X(RL_SG) \
-    X(RL_SG1) \
-    X(RR_SG) \
-    X(RR_SG1) \
-    X(FLW_AMB) \
-    X(FLW_AMB1) \
-    X(FLW_OBJ) \
-    X(FLW_OBJ1) \
-    X(FLW_RPM) \
-    X(FLW_RPM1) \
-    X(FRW_AMB) \
-    X(FRW_AMB1) \
-    X(FRW_OBJ) \
-    X(FRW_OBJ1) \
-    X(FRW_RPM) \
-    X(FRW_RPM1) \
-    X(RRW_AMB) \
-    X(RRW_AMB1) \
-    X(RRW_OBJ) \
-    X(RRW_OBJ1) \
-    X(RRW_RPM) \
-    X(RRW_RPM1) \
-    X(RLW_AMB) \
-    X(RLW_AMB1) \
-    X(RLW_OBJ) \
-    X(RLW_OBJ1) \
-    X(RLW_RPM) \
-    X(RLW_RPM1) \
-    X(BRAKE_FLUID) \
-    X(BRAKE_FLUID1) \
-    X(THROTTLE_LOAD) \
-    X(THROTTLE_LOAD1) \
-    X(BRAKE_LOAD) \
-    X(BRAKE_LOAD1) \
-    X(DRS) \
-    X(GPS_LON) \
-    X(GPS_LON1) \
-    X(GPS_LON2) \
-    X(GPS_LON3) \
-    X(GPS_LAT) \
-    X(GPS_LAT1) \
-    X(GPS_LAT2) \
-    X(GPS_LAT3) \
-    X(GPS_SPD) \
-    X(GPS_SPD1) \
-    X(GPS_SPD2) \
-    X(GPS_SPD3) \
-    X(GPS_FIX) \
-    X(ECT) \
-    X(OIL_PSR) \
-    X(OIL_PSR1) \
-    X(TPS) \
-    X(APS) \
-    X(DRIVEN_WSPD) \
-    X(DRIVEN_WSPD1) \
-    X(TESTNO) \
-    X(DTC_FLW) \
-    X(DTC_FRW) \
-    X(DTC_RLW) \
-    X(DTC_RRW) \
-    X(DTC_FLSG) \
-    X(DTC_FRSG) \
-    X(DTC_RLSG) \
-    X(DTC_RRSG) \
-    X(DTC_IMU) \
-    X(GPS_0_) \
-    X(GPS_1_) \
-    X(CH_COUNT)
-
-enum LogChannel {
-    #define X(channel) channel,
-    LOG_CHANNELS
-    #undef X
-};
 
 uint8_t logBuffer[CH_COUNT];
 uint8_t usbBuffer[64];
@@ -627,47 +502,7 @@ void uart_input_task(void *pvParameters) {
     }
 }
 
-// Task that runs DTC error checking at 50Hz
-void dtc_task(void *pvParameters) {
-    const TickType_t xFrequency = pdMS_TO_TICKS(20); // 50Hz = 20ms period
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-    
-    ESP_LOGI(TAG, "DTC error check task started at 50Hz");
-    
-    while (1) {
-        // Wait for the next cycle (50Hz = every 20ms)
-        vTaskDelayUntil(&xLastWakeTime, xFrequency);
-        
-        // Get current time in ticks for DTC functions
-        uint32_t current_time = pdTICKS_TO_MS(xTaskGetTickCount());
-        
-        // Run the DTC error check
-        DTC_Error_Check(current_time);
-    }
-}
 
-// Fast logging function - minimal overhead
-static inline esp_err_t fast_log_buffer(void) {
-    if (log_file == NULL) {
-        return ESP_ERR_INVALID_STATE;
-    }
-    
-    // Write entire buffer at once - fastest method
-    size_t written = fwrite(logBuffer, sizeof(uint8_t), CH_COUNT, log_file);
-    
-    if (written != CH_COUNT) {
-        ESP_LOGE(TAG, "Log write failed: %zu/%d bytes", written, CH_COUNT);
-        return ESP_FAIL;
-    }
-    
-    // Only flush periodically, not every write (for performance)
-    static uint32_t write_count = 0;
-    if (++write_count % 10 == 0) {  // Flush every 10 writes
-        fflush(log_file);
-    }
-    
-    return ESP_OK;
-}
 
 void logBuffer_task(void *pvParamaters){
     //Initialize SD Card / File System?
@@ -748,7 +583,11 @@ void logBuffer_task(void *pvParamaters){
         logBuffer[GPS_0_]   = dtc_devices[gps_0_DTC]->errState;
         logBuffer[GPS_1_]   = dtc_devices[gps_1_DTC]->errState;
 
-        //Write Data to SD Card
+        // Write Data to SD Card - mutex handling is internal
+        esp_err_t result = fast_log_buffer(logBuffer, CH_COUNT);
+        if (result != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to write log buffer to SD card");
+        }
 
     }
 }
@@ -760,6 +599,7 @@ void app_main(void)
     ESP_LOGI(TAG, "Starting ESP32 UART Command Application");
     
     // Initialize UART
+    gnss_init();
     uart_init();
     DTC_Init(pdTICKS_TO_MS(xTaskGetTickCount()));
     i2c_master_init();
@@ -789,14 +629,12 @@ void app_main(void)
         return;
     }
 
-    // Add DTC error checking task
-    result = xTaskCreate(dtc_task, "dtc_check", 2048, NULL, 6, NULL);
-    if (result != pdPASS) {
+
+    if (dtc_start_task() != ESP_OK) {
         ESP_LOGE(TAG, "Failed to create dtc_task");
         return;
     }
 
-    gnss_init();
 
     gnss_start_task();
 
