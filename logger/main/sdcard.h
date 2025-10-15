@@ -18,8 +18,6 @@
 
 extern FILE *log_file;
 extern SemaphoreHandle_t log_file_mutex;
-extern char current_log_filename[64];
-extern char default_log_filename[32];
 
 // Function declarations
 void sdcard_init(void);
@@ -30,7 +28,7 @@ esp_err_t fast_log_buffer(const uint8_t *data_buffer, uint8_t buffer_len);
 esp_err_t sdcard_create_numbered_log_file(const char *filename);
 esp_err_t nvs_set_log_name(const char *log_name);
 esp_err_t nvs_get_log_name(char *buffer, size_t buffer_size);
-esp_err_t validate_filename(const char *filename);
+static esp_err_t validate_filename(const char *filename);
 static bool is_valid_fat32_filename_char(char ch);
 const char* sdcard_get_current_log_filename(void);
 esp_err_t nvs_set_testno(uint8_t testno);

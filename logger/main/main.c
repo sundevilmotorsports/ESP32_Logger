@@ -18,16 +18,6 @@
 #include "log_chnl.h"
 #include "uart.h"
 
-//TODO: Add SD card file storage
-
-
-#define UART_PORT UART_NUM_0  // or whichever UART port you're using
-#define UART_BUF_SIZE 1024
-#define RD_BUF_SIZE 128
-
-// These were found in v3.3 of the logger Schematic (basically if this is wrong yell at Kaden)
-#define CAN_CTX 11 //GPIO 18
-#define CAN_RTX 12 //GPIO 8
 
 
 uint8_t logBuffer[CH_COUNT];

@@ -16,6 +16,7 @@
 
 const char* TAG = "FILE_SYS";
 
+//TODO: Finish implementing default_log_filename with nvs, make sure value updates every time default_log_filename is changed by uart function
 
 
 // Global persistent variables - these stay in scope
@@ -31,55 +32,6 @@ char default_log_filename[MAX_FILE_NAME_LENGTH >> 1];
 static char current_log_filename[MAX_FILE_NAME_LENGTH];
 
 
-static esp_err_t write_file(const char *path, char *data)
-{
-    ESP_LOGI(TAG, "Opening file %s", path);
-    FILE *f = fopen(path, "w");
-    if (f == NULL) {
-        ESP_LOGE(TAG, "Failed to open file for writing");
-        return ESP_FAIL;
-    }
-    fprintf(f, data);
-    fclose(f);
-    ESP_LOGI(TAG, "File written");
-
-    return ESP_OK;
-}
-
-static esp_err_t append_file(FILE *file_handle, const uint8_t *data_buffer, size_t buffer_size)
-{
-    if (file_handle == NULL) {
-        ESP_LOGE(TAG, "Invalid file handle");
-        return ESP_ERR_INVALID_ARG;
-    }
-    
-    if (data_buffer == NULL) {
-        ESP_LOGE(TAG, "Invalid data buffer");
-        return ESP_ERR_INVALID_ARG;
-    }
-    
-    if (buffer_size == 0) {
-        ESP_LOGW(TAG, "Buffer size is zero, nothing to write");
-        return ESP_OK;
-    }
-    
-    // Write all bytes at once (more efficient)
-    size_t bytes_written = fwrite(data_buffer, sizeof(uint8_t), buffer_size, file_handle);
-    
-    if (bytes_written != buffer_size) {
-        ESP_LOGE(TAG, "Failed to write all data. Expected: %zu, Written: %zu", buffer_size, bytes_written);
-        return ESP_FAIL;
-    }
-    
-    // Flush to ensure data is written to storage
-    if (fflush(file_handle) != 0) {
-        ESP_LOGE(TAG, "Failed to flush file buffer");
-        return ESP_FAIL;
-    }
-    
-    ESP_LOGD(TAG, "Successfully appended %zu bytes to file", bytes_written);
-    return ESP_OK;
-}
 
 // Open a new log file
 static esp_err_t open_log_file(const char *filename) {
@@ -495,7 +447,7 @@ esp_err_t sdcard_create_numbered_log_file(const char *filename){
 
     //Copy file path into global
     strncpy(current_log_filename, log_path, sizeof(current_log_filename));
-    current_log_filename[sizeof(current_log_filename) - 1];
+    current_log_filename[sizeof(current_log_filename) - 1] = '\0';
 
     // Open the new log file
     return open_log_file(log_path);
@@ -572,3 +524,4 @@ static esp_err_t validate_filename(const char *filename) {
 const char* sdcard_get_current_log_filename(void) {
     return current_log_filename;
 }
+
