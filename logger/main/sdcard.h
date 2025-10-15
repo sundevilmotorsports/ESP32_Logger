@@ -9,6 +9,8 @@
 #define MOUNT_POINT "/sdcard/"
 #define LOG_TYPE ".benji2"
 
+#define MAX_FILE_NAME_LENGTH 128
+
 #define PIN_NUM_MISO  5  // D0
 #define PIN_NUM_MOSI  15 // D1
 #define PIN_NUM_CLK   14 // CLK
@@ -25,5 +27,12 @@ void sdcard_deinit(void);
 bool sdcard_is_initialized(void);
 sdmmc_card_t* sdcard_get_card_handle(void);
 esp_err_t fast_log_buffer(const uint8_t *data_buffer, uint8_t buffer_len);
+esp_err_t sdcard_create_numbered_log_file(const char *filename);
+esp_err_t nvs_set_log_name(const char *log_name);
+esp_err_t nvs_get_log_name(char *buffer, size_t buffer_size);
+esp_err_t validate_filename(const char *filename);
+static bool is_valid_fat32_filename_char(char ch);
+const char* sdcard_get_current_log_filename(void);
+esp_err_t nvs_set_testno(uint8_t testno);
 
 #endif

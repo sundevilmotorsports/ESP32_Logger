@@ -7,6 +7,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include "dtc.h"
+#include "sdcard.h"
 
 static const char *TAG = "UART_MODULE";
 
@@ -125,6 +126,8 @@ void uart_input_task(void *pvParameters) {
     }
 }
 
+
+
 void uart_output_task(void *param) {
     ESP_LOGI(TAG, "Command processor task started");
     
@@ -212,7 +215,40 @@ void uart_output_task(void *param) {
                         printf("DTC display is already starting/stopping...\n");
                     }
                     break;
-                    
+
+            case 'f':
+            case 'F':
+                printf("=== Option F: Change Log File Name ===\n");
+                printf("Type your input and press Enter to submit, or ESC to cancel.\n");
+                
+                
+                char user_input[MAX_FILE_NAME_LENGTH >> 1];
+                esp_err_t input_result = uart_get_user_input(user_input, sizeof(user_input), "Input: ", 30000, true);
+                
+                switch (input_result) {
+                    case ESP_OK:
+                        nvs_set_log_name(user_input);
+                        nvs_set_testno(0);
+                        sdcard_create_numbered_log_file(user_input);
+                        printf("Starting new logfile: '%s'\n", sdcard_get_current_log_filename());
+                        break;
+                        
+                    case ESP_ERR_TIMEOUT:
+                        printf("Input timed out after 30 seconds.\n");
+                        break;
+                        
+                    case ESP_ERR_INVALID_RESPONSE:
+                        printf("Input cancelled by user (ESC pressed).\n");
+                        break;
+                        
+                    default:
+                        printf("Input failed with error: %s\n", esp_err_to_name(input_result));
+                        break;
+                }
+                
+                printf("Returning to command mode...\n");
+                break;
+
                 case 'h':
                 case 'H':
                 case '?':
@@ -223,6 +259,7 @@ void uart_output_task(void *param) {
                     printf("4 - Show memory info\n");
                     printf("5 - Show CPU usage\n");
                     printf("D - Toggle DTC info display\n");
+                    printf("F - Change log file name\n");
                     printf("R - Restart system\n");
                     printf("H - Show this help menu\n");
                     printf("ESC - Clear screen\n");
@@ -340,6 +377,103 @@ static void print_cpu_usage(void) {
         vPortFree(pxTaskStatusArray);
     } else {
         printf("Error: Failed to allocate memory for task status array\n");
+    }
+}
+
+esp_err_t uart_get_user_input(char *buffer, size_t buffer_size, const char *prompt, uint32_t timeout_ms, bool echo) {
+    if (buffer == NULL || buffer_size == 0) {
+        ESP_LOGE(TAG, "Invalid buffer parameters");
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    // Clear the buffer
+    memset(buffer, 0, buffer_size);
+    
+    // Show prompt if provided
+    if (prompt != NULL) {
+        printf("%s", prompt);
+        fflush(stdout);
+    }
+    
+    size_t index = 0;
+    TickType_t start_time = xTaskGetTickCount();
+    TickType_t timeout_ticks = pdMS_TO_TICKS(timeout_ms);
+    
+    // Temporarily disable the normal input processing by clearing the last_char
+    if (char_mutex != NULL) {
+        xSemaphoreTake(char_mutex, portMAX_DELAY);
+        last_char = '\0';
+        xSemaphoreGive(char_mutex);
+    }
+    
+    while (1) {
+        // Check for timeout
+        if (timeout_ms > 0 && (xTaskGetTickCount() - start_time) > timeout_ticks) {
+            ESP_LOGW(TAG, "User input timeout");
+            return ESP_ERR_TIMEOUT;
+        }
+        
+        // Read one character at a time
+        uint8_t received_char;
+        int len = uart_read_bytes(UART_PORT, &received_char, 1, pdMS_TO_TICKS(50));
+        
+        if (len > 0) {
+            char ch = (char)received_char;
+            
+            switch (ch) {
+                case '\r':  // Carriage return
+                case '\n':  // Line feed (Enter key)
+                    if (echo) {
+                        printf("\n");
+                    }
+                    buffer[index] = '\0';  // Null terminate
+                    ESP_LOGD(TAG, "User input received: '%s' (length: %d)", buffer, index);
+                    return ESP_OK;
+                    
+                case '\b':  // Backspace
+                case 127:   // DEL key
+                    if (index > 0) {
+                        index--;
+                        buffer[index] = '\0';
+                        if (echo) {
+                            printf("\b \b");  // Move back, print space, move back again
+                            fflush(stdout);
+                        }
+                    }
+                    break;
+                    
+                case 27:    // ESC key - cancel input
+                    if (echo) {
+                        printf("\n[Input cancelled]\n");
+                    }
+                    buffer[0] = '\0';
+                    return ESP_ERR_INVALID_RESPONSE;
+                    
+                default:
+                    // Only accept printable characters
+                    if (ch >= 32 && ch <= 126) {
+                        if (index < buffer_size - 1) {  // Leave room for null terminator
+                            buffer[index] = ch;
+                            index++;
+                            if (echo) {
+                                printf("%c", ch);
+                                fflush(stdout);
+                            }
+                        } else {
+                            // Buffer full - beep or indicate error
+                            if (echo) {
+                                printf("\a");  // Bell character
+                                fflush(stdout);
+                            }
+                            ESP_LOGW(TAG, "Input buffer full");
+                        }
+                    }
+                    break;
+            }
+        }
+        
+        // Small delay to prevent excessive CPU usage
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 

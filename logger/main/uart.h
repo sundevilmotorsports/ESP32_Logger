@@ -16,6 +16,7 @@ extern "C" {
 #define UART_PORT UART_NUM_0
 #define UART_BUF_SIZE 1024
 #define RD_BUF_SIZE 128
+#define MAX_INPUT_LENGTH 128
 
 // External variables
 extern SemaphoreHandle_t char_mutex;
@@ -26,6 +27,7 @@ esp_err_t uart_init(void);
 void uart_input_task(void *pvParameters);
 void uart_output_task(void *param);
 esp_err_t uart_create_tasks(void);
+esp_err_t uart_get_user_input(char *buffer, size_t buffer_size, const char *prompt, uint32_t timeout_ms, bool echo);
 void uart_deinit(void);
 
 // Utility functions
