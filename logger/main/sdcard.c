@@ -28,7 +28,6 @@ static bool g_sdcard_initialized = false;
 nvs_handle_t hnvs;
 FILE *log_file = NULL;
 SemaphoreHandle_t log_file_mutex;
-char default_log_filename[MAX_FILE_NAME_LENGTH >> 1];
 static char current_log_filename[MAX_FILE_NAME_LENGTH];
 
 
@@ -408,6 +407,17 @@ void sdcard_init(){
 
 
     // Initialize the first log file
+    char default_log_filename[MAX_FILE_NAME_LENGTH >> 1];
+    ret = nvs_get_log_name(default_log_filename, sizeof(default_log_filename));
+    if(ret != ESP_OK){
+        ESP_LOGE(TAG, "Could not receive default log name from NVS, writing data_log_ to NVS");
+        strcpy(default_log_filename, "data_log_");
+        ret = nvs_set_log_name("data_log_");
+        if(ret != ESP_OK){
+            ESP_LOGE(TAG, "Unable to write default log name to NVS");
+        }
+    }
+    
     sdcard_create_numbered_log_file(default_log_filename);
 }
 
