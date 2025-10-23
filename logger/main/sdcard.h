@@ -11,9 +11,9 @@
 
 #define MAX_FILE_NAME_LENGTH 128
 
-#define PIN_NUM_MISO  5  // D0
-#define PIN_NUM_MOSI  15 // D1
-#define PIN_NUM_CLK   14 // CLK
+#define PIN_NUM_MISO  GPIO_NUM_10  // D0
+#define PIN_NUM_MOSI  GPIO_NUM_9 // D1
+#define PIN_NUM_CLK   GPIO_NUM_11 // CLK
 #define PIN_NUM_CS    13 // CS
 
 extern FILE *log_file;
@@ -32,5 +32,5 @@ static esp_err_t validate_filename(const char *filename);
 static bool is_valid_fat32_filename_char(char ch);
 const char* sdcard_get_current_log_filename(void);
 esp_err_t nvs_set_testno(uint8_t testno);
-
+esp_err_t nvs_increment_testno(uint8_t *testno);
 #endif

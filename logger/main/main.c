@@ -18,8 +18,6 @@
 #include "log_chnl.h"
 #include "uart.h"
 
-
-
 uint8_t logBuffer[CH_COUNT];
 uint8_t usbBuffer[64];
 
@@ -204,22 +202,27 @@ static void process_can_message(twai_frame_t *message) {
 
 
 void logBuffer_task(void *pvParamaters){
-    //Initialize SD Card / File System?
+    uint16_t fbp, rbp, stp, fls, frs, rrs, rls;
     
     while(1){
-        //Start Analog Listening
-        adc_enable();
+
 
         // //Log Analog Sensor Data
-        loggerEmplaceU16(logBuffer, F_BRAKEPRESSURE, getAnalog(ADC_FBP));
-        loggerEmplaceU16(logBuffer, R_BRAKEPRESSURE, getAnalog(ADC_RBP));
-        loggerEmplaceU16(logBuffer, STEERING, getAnalog(ADC_STP));
-        loggerEmplaceU16(logBuffer, FLSHOCK, getAnalog(ADC_FLS));
-        loggerEmplaceU16(logBuffer, FRSHOCK, getAnalog(ADC_FRS));
-        loggerEmplaceU16(logBuffer, RRSHOCK, getAnalog(ADC_RRS));
-        loggerEmplaceU16(logBuffer, RLSHOCK, getAnalog(ADC_RLS));
+        // Get ADC values quickly (no SPI operations here)
+        if (adc_get_values(&fbp, &rbp, &stp, &fls, &frs, &rrs, &rls) == ESP_OK) {
+            // Log Analog Sensor Data using cached values
+            loggerEmplaceU16(logBuffer, F_BRAKEPRESSURE, fbp);
+            loggerEmplaceU16(logBuffer, R_BRAKEPRESSURE, rbp);
+            loggerEmplaceU16(logBuffer, STEERING, stp);
+            loggerEmplaceU16(logBuffer, FLSHOCK, fls);
+            loggerEmplaceU16(logBuffer, FRSHOCK, frs);
+            loggerEmplaceU16(logBuffer, RRSHOCK, rrs);
+            loggerEmplaceU16(logBuffer, RLSHOCK, rls);
+        } else {
+            ESP_LOGW(TAG, "Using previous ADC values due to mutex timeout");
+        }
 
-        adc_disable();
+
 
         // //Report Battery Current and Voltage
         loggerEmplaceU16(logBuffer, CURRENT, getCurrent());
@@ -282,11 +285,11 @@ void logBuffer_task(void *pvParamaters){
         logBuffer[GPS_0_]   = dtc_devices[gps_0_DTC]->errState;
         logBuffer[GPS_1_]   = dtc_devices[gps_1_DTC]->errState;
 
-        // Write Data to SD Card - mutex handling is internal
-        esp_err_t result = fast_log_buffer(logBuffer, CH_COUNT);
-        if (result != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to write log buffer to SD card");
-        }
+        // // Write Data to SD Card - mutex handling is internal
+        // esp_err_t result = fast_log_buffer(logBuffer, CH_COUNT);
+        // if (result != ESP_OK) {
+        //     ESP_LOGW(TAG, "Failed to write log buffer to SD card");
+        // }
 
     }
 }
@@ -297,12 +300,14 @@ void app_main(void)
 
     
     // Initialize UART
+    sdcard_init();
     gnss_init();
     ESP_ERROR_CHECK(uart_init());
     DTC_Init(pdTICKS_TO_MS(xTaskGetTickCount()));
     i2c_master_init();
-    adcInit();
+    adc_init();
     can_init(process_can_message);
+
     
 
     ESP_ERROR_CHECK(uart_create_tasks());
@@ -314,6 +319,12 @@ void app_main(void)
 
 
     gnss_start_task();
+
+        // Create ADC reading task (high priority for consistent sampling)
+    BaseType_t result = xTaskCreate(logBuffer_task, "log buffer", 4096, NULL, 8, NULL);
+    if (result != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create Logging task");
+    }
 
     ESP_LOGI(TAG, "All tasks created successfully");
     

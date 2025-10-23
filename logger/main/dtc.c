@@ -12,7 +12,7 @@ const char* dtc_device_names[] = {
     #undef X
 };
 
-static const char *TAG = "DTC_ERROR";
+static const char *TAG = "DTC_MODULE";
 can_dtc *dtc_devices[DTC_COUNT];
 
 // Task that runs DTC error checking at 50Hz

@@ -132,6 +132,9 @@ enum LogChannel {
     #undef X
 };
 
+extern uint8_t logBuffer[CH_COUNT];
+
+
 // Optional: Generate string names for debugging/logging
 #ifdef LOG_CHANNEL_NAMES
 static const char* log_channel_names[] = {

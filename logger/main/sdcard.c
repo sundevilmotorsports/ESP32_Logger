@@ -7,29 +7,26 @@
 #include "nvs_flash.h"
 #include "esp_vfs_fat.h"
 #include "sdmmc_cmd.h"
-#include "driver/sdspi_host.h"
-#include "driver/spi_common.h"
-#include "driver/gpio.h"
+#include "driver/sdmmc_host.h"
 
 #define LOG_CHANNEL_NAMES
 #include "log_chnl.h"
 
-const char* TAG = "FILE_SYS";
+static const char* TAG = "FILE_SYS";
 
 //TODO: Finish implementing default_log_filename with nvs, make sure value updates every time default_log_filename is changed by uart function
 
 
 // Global persistent variables - these stay in scope
 static sdmmc_card_t* g_card = NULL;
-static sdmmc_host_t g_host;
-static sdspi_device_config_t g_slot_config;
+// static sdmmc_host_t g_host;
+// static sdspi_device_config_t g_slot_config;
 static bool g_sdcard_initialized = false;
 
 nvs_handle_t hnvs;
 FILE *log_file = NULL;
 SemaphoreHandle_t log_file_mutex;
-static char current_log_filename[MAX_FILE_NAME_LENGTH];
-
+static char current_log_filepath[MAX_FILE_NAME_LENGTH];
 
 
 // Open a new log file
@@ -56,8 +53,8 @@ static esp_err_t open_log_file(const char *filename) {
     setvbuf(log_file, NULL, _IOFBF, 4096);  // Full buffering with 4KB buffer
     
     // Update current filename
-    strncpy(current_log_filename, filename, sizeof(current_log_filename) - 1);
-    current_log_filename[sizeof(current_log_filename) - 1] = '\0';
+    strncpy(current_log_filepath, filename, sizeof(current_log_filepath) - 1);
+    current_log_filepath[sizeof(current_log_filepath) - 1] = '\0';
     
     ESP_LOGI(TAG, "Opened log file: %s", filename);
     
@@ -280,7 +277,7 @@ esp_err_t nvs_increment_testno(uint8_t *testno){
     if(err != ESP_OK){
         ESP_LOGE(TAG, "Failed to save testno: %s", esp_err_to_name(err));
     } else {
-        ESP_LOGI(TAG, "Incremented testno to %u", testno);
+        ESP_LOGI(TAG, "Incremented testno to %u", *testno);
     }
     
     return err;
@@ -328,8 +325,8 @@ void nvs_init(){
 }
 
 void sdcard_init(){
-    
     esp_err_t ret;
+    nvs_init();
 
     // Create mutex if not already created
     if (log_file_mutex == NULL) {
@@ -346,65 +343,72 @@ void sdcard_init(){
         return;
     }
 
-    // Initialize global host configuration (persistent)
-    g_host = (sdmmc_host_t)SDSPI_HOST_DEFAULT();
-    g_host.max_freq_khz = 400;
+    ESP_LOGI(TAG, "Initializing SD card in SPI mode...");
 
+    // Configure SPI bus for SD card
     spi_bus_config_t bus_cfg = {
-        .mosi_io_num = PIN_NUM_MOSI,
-        .miso_io_num = PIN_NUM_MISO,
-        .sclk_io_num = PIN_NUM_CLK,
+        .mosi_io_num = GPIO_NUM_12,     // Your CMD pin becomes MOSI
+        .miso_io_num = GPIO_NUM_10,     // Your D0 pin becomes MISO
+        .sclk_io_num = GPIO_NUM_11,     // Your CLK pin
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
         .max_transfer_sz = 4000,
     };
 
-    ret = spi_bus_initialize(g_host.slot, &bus_cfg, SDSPI_DEFAULT_DMA);
+    ret = spi_bus_initialize(SPI2_HOST, &bus_cfg, SDSPI_DEFAULT_DMA);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize SPI: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Failed to initialize SPI bus: %s", esp_err_to_name(ret));
         return;
     }
-    ESP_LOGI(TAG, "SPI initialized");
 
-    gpio_config_t cs_config = {
-        .pin_bit_mask = (1ULL << PIN_NUM_CS),
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE
-    };
-    gpio_config(&cs_config);
-    gpio_set_level(PIN_NUM_CS, 1);  // Set CS high
+    // Configure SPI device for SD card
+    sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();
+    slot_config.gpio_cs = GPIO_NUM_13;      // Use D3 as CS
+    slot_config.host_id = SPI2_HOST;
 
-    vTaskDelay(pdMS_TO_TICKS(500));
+    // Configure SDMMC host for SPI
+    sdmmc_host_t host = SDSPI_HOST_DEFAULT();
+    host.max_freq_khz = 400;  // Start with low frequency
 
-    // Initialize global slot configuration (persistent)
-    g_slot_config = (sdspi_device_config_t)SDSPI_DEVICE_CONFIG_DEFAULT();
-    g_slot_config.gpio_cs = PIN_NUM_CS;
-    g_slot_config.host_id = g_host.slot;
-
+    // Configure mount options
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
-        .format_if_mount_failed = true,
+        .format_if_mount_failed = false,  // Don't auto-format
         .max_files = 5,
         .allocation_unit_size = 16 * 1024
     };
 
-    // Mount and get persistent card handle
-    ret = esp_vfs_fat_sdspi_mount(MOUNT_POINT, &g_host, &g_slot_config, &mount_config, &g_card);
+    // Mount using SPI mode
+    ret = esp_vfs_fat_sdspi_mount(MOUNT_POINT, &host, &slot_config, &mount_config, &g_card);
 
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to mount filesystem: %s", esp_err_to_name(ret));
-        spi_bus_free(g_host.slot);
-        return;
+        ESP_LOGE(TAG, "Failed to mount SD card in SPI mode: %s", esp_err_to_name(ret));
+        
+        // Try even slower speed
+        host.max_freq_khz = 200;
+        ESP_LOGW(TAG, "Retrying with 200kHz clock...");
+        
+        ret = esp_vfs_fat_sdspi_mount(MOUNT_POINT, &host, &slot_config, &mount_config, &g_card);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "SD card mount failed even at 200kHz: %s", esp_err_to_name(ret));
+            spi_bus_free(SPI2_HOST);
+            return;
+        }
     }
 
     g_sdcard_initialized = true;
-    ESP_LOGI(TAG, "SD card mounted successfully");
+    ESP_LOGI(TAG, "SD card mounted successfully in SPI mode");
 
+    // Rest of your existing code for card info and log file creation...
     if (g_card != NULL) {
         sdmmc_card_print_info(stdout, g_card);
+        
+        const char* card_type = (g_card->ocr & (1 << 30)) ? "SDHC/SDXC" : "SDSC";
+        const char* speed_class = (g_card->csd.tr_speed > 25000000) ? "High Speed" : "Default Speed";
+        
+        ESP_LOGI(TAG, "SD card info: Name: %s, Type: %s, Speed: %s, Size: %lluMB", 
+                 g_card->cid.name, card_type, speed_class,
+                 ((uint64_t) g_card->csd.capacity) * g_card->csd.sector_size / (1024 * 1024));
     }
-
 
     // Initialize the first log file
     char default_log_filename[MAX_FILE_NAME_LENGTH >> 1];
@@ -456,8 +460,8 @@ esp_err_t sdcard_create_numbered_log_file(const char *filename){
     ESP_LOGI(TAG, "Created new log filename: %s (testno: %u)", log_path, testno);
 
     //Copy file path into global
-    strncpy(current_log_filename, log_path, sizeof(current_log_filename));
-    current_log_filename[sizeof(current_log_filename) - 1] = '\0';
+    strncpy(current_log_filepath, log_path, sizeof(current_log_filepath));
+    current_log_filepath[sizeof(current_log_filepath) - 1] = '\0';
 
     // Open the new log file
     return open_log_file(log_path);
@@ -532,6 +536,6 @@ static esp_err_t validate_filename(const char *filename) {
 
 // Add this function to allow read-only access from outside
 const char* sdcard_get_current_log_filename(void) {
-    return current_log_filename;
+    return current_log_filepath;
 }
 

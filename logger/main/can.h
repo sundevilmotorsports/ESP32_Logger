@@ -7,6 +7,11 @@
 
 extern twai_node_handle_t hfdcan;
 
+typedef struct {
+        twai_frame_header_t header;
+        uint8_t data[64];
+} safe_can_frame_t;
+
 // Callback function type for message processing
 typedef void (*can_message_callback_t)(twai_frame_t *message);
 

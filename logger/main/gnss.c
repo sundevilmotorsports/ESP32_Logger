@@ -145,7 +145,7 @@ static void parse_gsv_satellites(const char* sentence) {
     if (parsed == 3) {
         char constellation[3] = {0};
         strncpy(constellation, sentence + 1, 2);
-        ESP_LOGI(TAG, "GSV %s: Total satellites in view: %d", constellation, total_sats);
+        // ESP_LOGI(TAG, "GSV %s: Total satellites in view: %d", constellation, total_sats);
     }
 }
 

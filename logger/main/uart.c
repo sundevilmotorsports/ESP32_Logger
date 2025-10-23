@@ -8,6 +8,8 @@
 #include <inttypes.h>
 #include "dtc.h"
 #include "sdcard.h"
+#include "esp_task_wdt.h"
+#include "log_chnl.h"
 
 static const char *TAG = "UART_MODULE";
 
@@ -19,6 +21,9 @@ QueueHandle_t uart_event_queue = NULL;
 static char last_char = '\0';
 static TaskHandle_t dtc_info_task_handle = NULL;
 static bool dtc_info_running = false;
+
+static bool uart_input_mode = false;
+static char input_buffer_char = '\0';
 
 // Private function declarations
 static void print_dtc_info(void *pvParameters);
@@ -35,6 +40,8 @@ esp_err_t uart_init(void) {
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
     };
+    
+
 
     // Install UART driver with event queue
     esp_err_t ret = uart_driver_install(UART_PORT, UART_BUF_SIZE * 2, 0, 20, &uart_event_queue, 0);
@@ -61,6 +68,8 @@ esp_err_t uart_init(void) {
         ESP_LOGE(TAG, "Failed to create character mutex");
         return ESP_FAIL;
     }
+
+
     
     ESP_LOGI(TAG, "UART initialized successfully");
     return ESP_OK;
@@ -69,13 +78,14 @@ esp_err_t uart_init(void) {
 esp_err_t uart_create_tasks(void) {
     BaseType_t result;
 
+
     result = xTaskCreate(uart_input_task, "uart_input", 4096, NULL, 10, NULL);
     if (result != pdPASS) {
         ESP_LOGE(TAG, "Failed to create uart_input_task");
         return ESP_FAIL;
     }
 
-    result = xTaskCreate(uart_output_task, "uart_output", 4096, NULL, 5, NULL);
+    result = xTaskCreate(uart_output_task, "uart_output", 8192, NULL, 5, NULL);
     if (result != pdPASS) {
         ESP_LOGE(TAG, "Failed to create uart_output_task");
         return ESP_FAIL;
@@ -98,13 +108,28 @@ void uart_input_task(void *pvParameters) {
                 case UART_DATA: {
                     int len = uart_read_bytes(UART_PORT, data, event.size, portMAX_DELAY);
                     if (len > 0) {
-                        // Store the first character for processing
                         xSemaphoreTake(char_mutex, portMAX_DELAY);
-                        last_char = data[0];
+                        
+                        if (uart_input_mode) {
+                            // In input mode: store each character individually for the input function
+                            for (int i = 0; i < len; i++) {
+                                input_buffer_char = data[i];
+                                // Give the input function time to process this character
+                                xSemaphoreGive(char_mutex);
+                                vTaskDelay(pdMS_TO_TICKS(5)); // Small delay to ensure character is processed
+                                xSemaphoreTake(char_mutex, portMAX_DELAY);
+                            }
+                        } else {
+                            // Normal mode: store first character for command processing
+                            last_char = data[0];
+                        }
+                        
                         xSemaphoreGive(char_mutex);
                         
-                        // Echo the character back (optional)
-                        // uart_write_bytes(UART_PORT, (const char*)data, 1);
+                        // Echo characters back in normal mode (optional)
+                        if (!uart_input_mode) {
+                            // uart_write_bytes(UART_PORT, (const char*)data, 1);
+                        }
                     }
                     break;
                 }
@@ -125,7 +150,6 @@ void uart_input_task(void *pvParameters) {
         }
     }
 }
-
 
 
 void uart_output_task(void *param) {
@@ -184,11 +208,16 @@ void uart_output_task(void *param) {
                     print_cpu_usage();
                     break;
                     
-                case 'r':
-                case 'R':
-                    printf("=== Restarting ESP32 ===\n");
-                    vTaskDelay(pdMS_TO_TICKS(1000));
-                    esp_restart();
+                case 'a':
+                case 'A':
+                    printf("=== Option A: Report Analog ===\n");
+                    printf("Front Brake Pressure: %u\n", (logBuffer[F_BRAKEPRESSURE] << 8) | logBuffer[F_BRAKEPRESSURE1]);
+                    printf("Rear Brake Pressure:  %u\n", (logBuffer[R_BRAKEPRESSURE] << 8) | logBuffer[R_BRAKEPRESSURE1]);
+                    printf("Steering Position:    %u\n", (logBuffer[STEERING] << 8) | logBuffer[STEERING1]);
+                    printf("Front Left Shock:     %u\n", (logBuffer[FLSHOCK] << 8) | logBuffer[FLSHOCK1]);
+                    printf("Front Right Shock:    %u\n", (logBuffer[FRSHOCK] << 8) | logBuffer[FRSHOCK1]);
+                    printf("Rear Left Shock:      %u\n", (logBuffer[RLSHOCK] << 8) | logBuffer[RLSHOCK1]);
+                    printf("Rear Right Shock:     %u\n", (logBuffer[RRSHOCK] << 8) | logBuffer[RRSHOCK1]);
                     break;
                     
                 case 'd':
@@ -216,38 +245,49 @@ void uart_output_task(void *param) {
                     }
                     break;
 
-            case 'f':
-            case 'F':
-                printf("=== Option F: Change Log File Name ===\n");
-                printf("Type your input and press Enter to submit, or ESC to cancel.\n");
+                case 'f':
+                case 'F':
+                    printf("=== Option F: Change Log File Name ===\n");
+                    printf("Type your input and press Enter to submit, or ESC to cancel.\n");
+                    
+                    
+                    char user_input[MAX_FILE_NAME_LENGTH >> 1];
+                    esp_err_t input_result = uart_get_user_input(user_input, sizeof(user_input), "Input: ", 30000, true);
+                    
+                    switch (input_result) {
+                        case ESP_OK:
+                            nvs_set_log_name(user_input);
+                            nvs_set_testno(0);
+                            sdcard_create_numbered_log_file(user_input);
+                            printf("Starting new logfile: '%s'\n", sdcard_get_current_log_filename());
+                            break;
+                            
+                        case ESP_ERR_TIMEOUT:
+                            printf("Input timed out after 30 seconds.\n");
+                            break;
+                            
+                        case ESP_ERR_INVALID_RESPONSE:
+                            printf("Input cancelled by user (ESC pressed).\n");
+                            break;
+                            
+                        default:
+                            printf("Input failed with error: %s\n", esp_err_to_name(input_result));
+                            break;
+                    }
+                    
+                    printf("Returning to command mode...\n");
+                    break;
+                case 'i':
+                case 'I':
+                    printf("=== Option I: Increment Log File ===\n");
+                    char buffer[32];
+                    nvs_get_log_name(buffer, sizeof(buffer));
+                    sdcard_create_numbered_log_file(buffer);
+                    printf("Starting new logfile: '%s'\n", sdcard_get_current_log_filename());
+                    break;
                 
-                
-                char user_input[MAX_FILE_NAME_LENGTH >> 1];
-                esp_err_t input_result = uart_get_user_input(user_input, sizeof(user_input), "Input: ", 30000, true);
-                
-                switch (input_result) {
-                    case ESP_OK:
-                        nvs_set_log_name(user_input);
-                        nvs_set_testno(0);
-                        sdcard_create_numbered_log_file(user_input);
-                        printf("Starting new logfile: '%s'\n", sdcard_get_current_log_filename());
-                        break;
-                        
-                    case ESP_ERR_TIMEOUT:
-                        printf("Input timed out after 30 seconds.\n");
-                        break;
-                        
-                    case ESP_ERR_INVALID_RESPONSE:
-                        printf("Input cancelled by user (ESC pressed).\n");
-                        break;
-                        
-                    default:
-                        printf("Input failed with error: %s\n", esp_err_to_name(input_result));
-                        break;
-                }
-                
-                printf("Returning to command mode...\n");
-                break;
+
+
 
                 case 'h':
                 case 'H':
@@ -265,7 +305,12 @@ void uart_output_task(void *param) {
                     printf("ESC - Clear screen\n");
                     printf("================================\n");
                     break;
-                    
+                case 'r':
+                case 'R':
+                    printf("=== Restarting ESP32 ===\n");
+                    vTaskDelay(pdMS_TO_TICKS(1000));
+                    esp_restart();
+                    break;
                 case 27: // ESC key
                     printf("\033[2J\033[H"); // Clear screen and move cursor to top
                     printf("Screen cleared!\n");
@@ -385,6 +430,11 @@ esp_err_t uart_get_user_input(char *buffer, size_t buffer_size, const char *prom
         ESP_LOGE(TAG, "Invalid buffer parameters");
         return ESP_ERR_INVALID_ARG;
     }
+        // Subscribe current task to TWDT for this function
+    bool was_subscribed = (esp_task_wdt_status(NULL) == ESP_OK);
+    if (!was_subscribed) {
+        esp_task_wdt_add(NULL);  // Add current task
+    }
     
     // Clear the buffer
     memset(buffer, 0, buffer_size);
@@ -399,35 +449,61 @@ esp_err_t uart_get_user_input(char *buffer, size_t buffer_size, const char *prom
     TickType_t start_time = xTaskGetTickCount();
     TickType_t timeout_ticks = pdMS_TO_TICKS(timeout_ms);
     
-    // Temporarily disable the normal input processing by clearing the last_char
+    // Enable input mode for better character handling
     if (char_mutex != NULL) {
         xSemaphoreTake(char_mutex, portMAX_DELAY);
-        last_char = '\0';
+        uart_input_mode = true;
+        input_buffer_char = '\0';  // Clear input buffer
+        last_char = '\0';  // Clear last_char to prevent interference
         xSemaphoreGive(char_mutex);
     }
     
     while (1) {
+        esp_task_wdt_reset();
         // Check for timeout
         if (timeout_ms > 0 && (xTaskGetTickCount() - start_time) > timeout_ticks) {
             ESP_LOGW(TAG, "User input timeout");
+            // Disable input mode before returning
+            if (char_mutex != NULL) {
+                xSemaphoreTake(char_mutex, portMAX_DELAY);
+                uart_input_mode = false;
+                xSemaphoreGive(char_mutex);
+            }
             return ESP_ERR_TIMEOUT;
         }
         
-        // Read one character at a time
-        uint8_t received_char;
-        int len = uart_read_bytes(UART_PORT, &received_char, 1, pdMS_TO_TICKS(50));
+        // Get character from the input buffer
+        char ch = '\0';
+        if (char_mutex != NULL) {
+            xSemaphoreTake(char_mutex, portMAX_DELAY);
+            if (input_buffer_char != '\0') {
+                ch = input_buffer_char;
+                input_buffer_char = '\0';  // Consume the character
+            }
+            xSemaphoreGive(char_mutex);
+        }
         
-        if (len > 0) {
-            char ch = (char)received_char;
-            
+        if (ch != '\0') {
             switch (ch) {
                 case '\r':  // Carriage return
                 case '\n':  // Line feed (Enter key)
                     if (echo) {
                         printf("\n");
+                        fflush(stdout);
                     }
                     buffer[index] = '\0';  // Null terminate
-                    ESP_LOGD(TAG, "User input received: '%s' (length: %d)", buffer, index);
+                    ESP_LOGD(TAG, "User input received: '%s' (length: %zu)", buffer, index);
+                    
+                    // Disable input mode before returning
+                    if (char_mutex != NULL) {
+                        xSemaphoreTake(char_mutex, portMAX_DELAY);
+                        uart_input_mode = false;
+                        xSemaphoreGive(char_mutex);
+                    }
+                    // Cleanup: unsubscribe if we subscribed
+                    if (!was_subscribed) {
+                        esp_task_wdt_delete(NULL);
+                    }
                     return ESP_OK;
                     
                 case '\b':  // Backspace
@@ -445,8 +521,20 @@ esp_err_t uart_get_user_input(char *buffer, size_t buffer_size, const char *prom
                 case 27:    // ESC key - cancel input
                     if (echo) {
                         printf("\n[Input cancelled]\n");
+                        fflush(stdout);
                     }
                     buffer[0] = '\0';
+                    
+                    // Disable input mode before returning
+                    if (char_mutex != NULL) {
+                        xSemaphoreTake(char_mutex, portMAX_DELAY);
+                        uart_input_mode = false;
+                        xSemaphoreGive(char_mutex);
+                    }
+                    // Cleanup: unsubscribe if we subscribed
+                    if (!was_subscribed) {
+                        esp_task_wdt_delete(NULL);
+                    }
                     return ESP_ERR_INVALID_RESPONSE;
                     
                 default:
@@ -473,7 +561,7 @@ esp_err_t uart_get_user_input(char *buffer, size_t buffer_size, const char *prom
         }
         
         // Small delay to prevent excessive CPU usage
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(5));  // 5ms delay for responsive input
     }
 }
 

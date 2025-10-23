@@ -13,9 +13,13 @@
 #include "driver/gpio.h"
 
 
-#define ADC_PIN GPIO_NUM_4
+#define ADC_CS GPIO_NUM_4
 #define ADC_ENABLE  1
 #define ADC_DISABLE 0
+#define ADC_DIN GPIO_NUM_7
+#define ADC_DOUT GPIO_NUM_6
+#define ADC_CLK GPIO_NUM_5
+
 
 #define ADC_FBP 0
 #define ADC_RBP 1
@@ -26,16 +30,20 @@
 #define ADC_RLS 6
 #define ADC_RRS 7
 
-void adcInit();
-void adc_enable();
-void adc_disable();
+
 
 typedef struct {
     uint16_t value;
     esp_err_t error;
 } ADC_Result;
 
-uint16_t getAnalog(uint8_t channel);
+
+esp_err_t adc_init(void);
+
+uint16_t adc_get_channel(uint8_t channel);
+
+esp_err_t adc_get_values(uint16_t *fbp, uint16_t *rbp, uint16_t *stp, 
+                        uint16_t *fls, uint16_t *frs, uint16_t *rrs, uint16_t *rls);
 
 
 #endif /* INC_ADC_H_ */

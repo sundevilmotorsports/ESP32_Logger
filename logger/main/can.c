@@ -53,10 +53,7 @@ static bool can_rx_cb(twai_node_handle_t handle, const twai_rx_done_event_data_t
 }
 
 static void can_receive_task(void *pvParameters) {
-    typedef struct {
-        twai_frame_header_t header;
-        uint8_t data[64];
-    } safe_can_frame_t;
+
     
     safe_can_frame_t rx_frame;
     
@@ -81,7 +78,7 @@ static void can_receive_task(void *pvParameters) {
 void can_init(can_message_callback_t callback_function){
     process = callback_function;
     // Create queue for received messages
-    rx_queue = xQueueCreate(10, sizeof(twai_message_t));
+    rx_queue = xQueueCreate(10, sizeof(safe_can_frame_t));
     
     // Create semaphore for RX notifications
     rx_sem = xSemaphoreCreateBinary();
