@@ -111,23 +111,23 @@ void adc_deinit(void) {
 
 uint16_t adc_get_channel(uint8_t channel) {
     spi_transaction_t t = {0};
-    uint8_t channelInput = channel << 3;
+    uint16_t tx_data = (channel & 0x07) << 11;  // channel select bits in bits [13:11]
+    uint16_t rx_data = 0;
 
-    // First transaction: send channel, receive don't care
-    t.length = 8;
-    t.tx_buffer = &channelInput;
-    t.rx_buffer = buffer;
-    spi_device_transmit(spi_handle, &t);
+    t.length = 16;                     // 16 bits total
+    t.tx_buffer = &tx_data;
+    t.rx_buffer = &rx_data;
 
-    // Second transaction: send dummy, receive actual data
-    uint8_t dummy = 0;
-    t.tx_buffer = &dummy;
-    t.rx_buffer = buffer;
-    spi_device_transmit(spi_handle, &t);
+    esp_err_t ret = spi_device_transmit(spi_handle, &t);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "SPI transmit failed: %s", esp_err_to_name(ret));
+        return 0;
+    }
 
-    return (buffer[0] << 8) | buffer[1];
+    // The ADC returns the 12-bit result in bits [15:4]
+    uint16_t result = (rx_data >> 4) & 0x0FFF;
+    return result;
 }
-
 
 
 esp_err_t adc_get_values(uint16_t *fbp, uint16_t *rbp, uint16_t *stp, 

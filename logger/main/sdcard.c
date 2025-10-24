@@ -361,6 +361,19 @@ void sdcard_init(){
         return;
     }
 
+    gpio_config_t cs_config = {
+        .pin_bit_mask = (1ULL << 13),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE
+    };
+    
+    gpio_config(&cs_config);
+    gpio_set_level(GPIO_NUM_13, 1);
+
+    vTaskDelay(pdMS_TO_TICKS(500));
+
     // Configure SPI device for SD card
     sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();
     slot_config.gpio_cs = GPIO_NUM_13;      // Use D3 as CS
@@ -489,6 +502,8 @@ static bool is_valid_fat32_filename_char(char ch) {
     }
 }
 
+
+//TODO: Add checking the file system for already used filenames, possibly
 static esp_err_t validate_filename(const char *filename) {
     if (filename == NULL || strlen(filename) == 0) {
         return ESP_ERR_INVALID_ARG;
