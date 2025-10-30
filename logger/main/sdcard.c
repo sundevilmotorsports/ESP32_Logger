@@ -28,119 +28,101 @@ FILE *log_file = NULL;
 SemaphoreHandle_t log_file_mutex;
 static char current_log_filepath[MAX_FILE_NAME_LENGTH];
 
+//Forward Declarations
+static esp_err_t open_log_file(const char *filename);
+static bool is_valid_fat32_filename_char(char ch);
+static esp_err_t validate_filename(const char *filename);
 
-// Open a new log file
-static esp_err_t open_log_file(const char *filename) {
-    xSemaphoreTake(log_file_mutex, portMAX_DELAY);
-    
-    // Close existing file if open
-    if (log_file != NULL) {
-        fflush(log_file);
-        fclose(log_file);
-        log_file = NULL;
-        ESP_LOGI(TAG, "Closed previous log file");
-    }
-    
-    // Open new file
-    log_file = fopen(filename, "a");
-    if (log_file == NULL) {
-        ESP_LOGE(TAG, "Failed to open log file: %s", filename);
-        xSemaphoreGive(log_file_mutex);
-        return ESP_FAIL;
-    }
-    
-    // Set buffer mode for better performance
-    setvbuf(log_file, NULL, _IOFBF, 4096);  // Full buffering with 4KB buffer
-    
-    // Update current filename
-    strncpy(current_log_filepath, filename, sizeof(current_log_filepath) - 1);
-    current_log_filepath[sizeof(current_log_filepath) - 1] = '\0';
-    
-    ESP_LOGI(TAG, "Opened log file: %s", filename);
-    
-    // Build CSV header string
-    char csv_header[2048] = {0};  // Adjust size as needed
-    size_t header_len = 0;
-    
-    for (int i = 0; i < (sizeof(log_channel_names)/sizeof(log_channel_names[0])) - 1; i++) {
-        size_t name_len = strlen(log_channel_names[i]);
-        if (header_len + name_len < sizeof(csv_header) - 1) {  // Leave room for \0
-            memcpy(csv_header + header_len, log_channel_names[i], name_len);
-            header_len += name_len;
-        } else {
-            ESP_LOGW(TAG, "CSV header buffer too small, truncating");
-            break;
-        }
-    }
 
-    // Write header length as first 4 bytes (little-endian format)
-    uint32_t header_len_le = header_len;  // Convert to little-endian if needed
-    size_t len_written = fwrite(&header_len_le, sizeof(uint32_t), 1, log_file);
-    if (len_written != 1) {
-        ESP_LOGE(TAG, "Failed to write header length");
-        fclose(log_file);
-        log_file = NULL;
-        xSemaphoreGive(log_file_mutex);
-        return ESP_FAIL;
+//Utility Functions
+static bool is_valid_fat32_filename_char(char ch) {
+    // FAT32 invalid characters: \ / : * ? " < > |
+    // Also exclude control characters (0-31) and DEL (127)
+    if (ch < 32 || ch == 127) return false;
+    
+    switch (ch) {
+        case '\\':
+        case '/':
+        case ':':
+        case '*':
+        case '?':
+        case '"':
+        case '<':
+        case '>':
+        case '|':
+        case '.':   // Exclude periods as requested
+            return false;
+        default:
+            return true;
     }
-    
-    // Write CSV header data
-    size_t written = fwrite(csv_header, 1, header_len, log_file);
-    if (written != header_len) {
-        ESP_LOGE(TAG, "Failed to write CSV header");
-        fclose(log_file);
-        log_file = NULL;
-        xSemaphoreGive(log_file_mutex);
-        return ESP_FAIL;
-    }
-    
-    // Flush to ensure header is written immediately
-    fflush(log_file);
-    
-    
-    xSemaphoreGive(log_file_mutex);
-    return ESP_OK;
 }
 
-esp_err_t fast_log_buffer(const uint8_t *data_buffer, uint8_t buffer_len) {
-    if (data_buffer == NULL || buffer_len == 0) {
+//TODO: Add checking the file system for already used filenames, possibly
+static esp_err_t validate_filename(const char *filename) {
+    if (filename == NULL || strlen(filename) == 0) {
         return ESP_ERR_INVALID_ARG;
     }
     
-    if (log_file_mutex == NULL || log_file == NULL) {
-        ESP_LOGW(TAG, "SD card not initialized or file not open");
-        return ESP_ERR_INVALID_STATE;
+    size_t len = strlen(filename);
+    
+    // Check length (FAT32 supports up to 255 characters, but let's be conservative)
+    if (len > MAX_FILE_NAME_LENGTH >> 1) {
+        printf("Error: Filename too long (max %d characters)\n", MAX_FILE_NAME_LENGTH >> 1);
+        return ESP_ERR_INVALID_SIZE;
     }
     
-    // Take mutex with timeout to avoid indefinite blocking
-    if (xSemaphoreTake(log_file_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
-        ESP_LOGW(TAG, "Failed to acquire log file mutex within timeout");
-        return ESP_ERR_TIMEOUT;
-    }
-    esp_err_t result = ESP_OK;
-    
-    // Critical section - file operations
-    if (log_file != NULL) {
-        size_t written = fwrite(data_buffer, sizeof(uint8_t), buffer_len, log_file);
-        
-        if (written != buffer_len) {
-            ESP_LOGE(TAG, "Log write failed: %zu/%zu bytes", written, buffer_len);
-            result = ESP_FAIL;
-        } else {
-            // Only flush periodically for performance
-            static uint32_t write_count = 0;
-            if (++write_count % 10 == 0) {
-                fflush(log_file);
-            }
+    // Check for invalid characters
+    for (size_t i = 0; i < len; i++) {
+        if (!is_valid_fat32_filename_char(filename[i])) {
+            printf("Error: Invalid character '%c' at position %zu\n", filename[i], i);
+            printf("Invalid chars: \\ / : * ? \" < > | .\n");
+            return ESP_ERR_INVALID_ARG;
         }
-    } else {
-        result = ESP_ERR_INVALID_STATE;
     }
     
-    // Always release the mutex
-    xSemaphoreGive(log_file_mutex);
+    // Check for reserved names (case insensitive)
+    const char* reserved_names[] = {
+        "CON", "PRN", "AUX", "NUL",
+        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+    };
     
-    return result;
+    for (size_t i = 0; i < sizeof(reserved_names) / sizeof(reserved_names[0]); i++) {
+        if (strcasecmp(filename, reserved_names[i]) == 0) {
+            printf("Error: '%s' is a reserved filename\n", filename);
+            return ESP_ERR_INVALID_ARG;
+        }
+    }
+    
+    // Check that filename doesn't start or end with space
+    if (filename[0] == ' ' || filename[len - 1] == ' ') {
+        printf("Error: Filename cannot start or end with space\n");
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    return ESP_OK;
+}
+
+
+//NVS Functions
+void nvs_init(){
+    esp_err_t ret;
+
+    // Initialize NVS
+    ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        // NVS partition was truncated and needs to be erased
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+
+    ret = nvs_open("storage", NVS_READWRITE, &hnvs);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Error (%s) opening NVS handle!", esp_err_to_name(ret));
+        return;
+    }
 }
 
 esp_err_t nvs_get_log_name(char *buffer, size_t buffer_size) {
@@ -304,26 +286,172 @@ esp_err_t nvs_set_testno(uint8_t testno){
     return err;
 }
 
-void nvs_init(){
-    esp_err_t ret;
 
-    // Initialize NVS
-    ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        // NVS partition was truncated and needs to be erased
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
+//File Operations
+// Open a new log file
+static esp_err_t open_log_file(const char *filename) {
+    xSemaphoreTake(log_file_mutex, portMAX_DELAY);
+    
+    // Close existing file if open
+    if (log_file != NULL) {
+        fflush(log_file);
+        fclose(log_file);
+        log_file = NULL;
+        ESP_LOGI(TAG, "Closed previous log file");
     }
-    ESP_ERROR_CHECK(ret);
-
-
-    ret = nvs_open("storage", NVS_READWRITE, &hnvs);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Error (%s) opening NVS handle!", esp_err_to_name(ret));
-        return;
+    
+    // Open new file
+    log_file = fopen(filename, "a");
+    if (log_file == NULL) {
+        ESP_LOGE(TAG, "Failed to open log file: %s", filename);
+        xSemaphoreGive(log_file_mutex);
+        return ESP_FAIL;
     }
+    
+    // Set buffer mode for better performance
+    setvbuf(log_file, NULL, _IOFBF, 4096);  // Full buffering with 4KB buffer
+    
+    // Update current filename
+    strncpy(current_log_filepath, filename, sizeof(current_log_filepath) - 1);
+    current_log_filepath[sizeof(current_log_filepath) - 1] = '\0';
+    
+    ESP_LOGI(TAG, "Opened log file: %s", filename);
+    
+    // Build CSV header string
+    char csv_header[2048] = {0};  // Adjust size as needed
+    size_t header_len = 0;
+    
+    for (int i = 0; i < (sizeof(log_channel_names)/sizeof(log_channel_names[0])) - 1; i++) {
+        size_t name_len = strlen(log_channel_names[i]);
+        if (header_len + name_len < sizeof(csv_header) - 1) {  // Leave room for \0
+            memcpy(csv_header + header_len, log_channel_names[i], name_len);
+            header_len += name_len;
+        } else {
+            ESP_LOGW(TAG, "CSV header buffer too small, truncating");
+            break;
+        }
+    }
+
+    // Write header length as first 4 bytes (little-endian format)
+    uint32_t header_len_le = header_len;  // Convert to little-endian if needed
+    size_t len_written = fwrite(&header_len_le, sizeof(uint32_t), 1, log_file);
+    if (len_written != 1) {
+        ESP_LOGE(TAG, "Failed to write header length");
+        fclose(log_file);
+        log_file = NULL;
+        xSemaphoreGive(log_file_mutex);
+        return ESP_FAIL;
+    }
+    
+    // Write CSV header data
+    size_t written = fwrite(csv_header, 1, header_len, log_file);
+    if (written != header_len) {
+        ESP_LOGE(TAG, "Failed to write CSV header");
+        fclose(log_file);
+        log_file = NULL;
+        xSemaphoreGive(log_file_mutex);
+        return ESP_FAIL;
+    }
+    
+    // Flush to ensure header is written immediately
+    fflush(log_file);
+    
+    
+    xSemaphoreGive(log_file_mutex);
+    return ESP_OK;
 }
 
+esp_err_t fast_log_buffer(const uint8_t *data_buffer, uint8_t buffer_len) {
+    if (data_buffer == NULL || buffer_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    if (log_file_mutex == NULL || log_file == NULL) {
+        ESP_LOGW(TAG, "SD card not initialized or file not open");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Take mutex with timeout to avoid indefinite blocking
+    if (xSemaphoreTake(log_file_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+        ESP_LOGW(TAG, "Failed to acquire log file mutex within timeout");
+        return ESP_ERR_TIMEOUT;
+    }
+    esp_err_t result = ESP_OK;
+    
+    // Critical section - file operations
+    if (log_file != NULL) {
+        size_t written = fwrite(data_buffer, sizeof(uint8_t), buffer_len, log_file);
+        
+        if (written != buffer_len) {
+            ESP_LOGE(TAG, "Log write failed: %zu/%zu bytes", written, buffer_len);
+            result = ESP_FAIL;
+        } else {
+            // Only flush periodically for performance
+            static uint32_t write_count = 0;
+            if (++write_count % 10 == 0) {
+                fflush(log_file);
+            }
+        }
+    } else {
+        result = ESP_ERR_INVALID_STATE;
+    }
+    
+    // Always release the mutex
+    xSemaphoreGive(log_file_mutex);
+    
+    return result;
+}
+
+esp_err_t sdcard_create_numbered_log_file(const char *filename){
+    if (filename == NULL) {
+        ESP_LOGE(TAG, "Filename parameter is NULL");
+        return ESP_ERR_INVALID_ARG;
+    }
+    esp_err_t err = validate_filename(filename);
+    if(err != ESP_OK){
+        ESP_LOGE(TAG, "Invalid Filename Format!");
+        return err;
+    }
+    
+    // Create internal buffer of adequate size
+    char log_path[MAX_FILE_NAME_LENGTH];
+    uint8_t testno = 0;
+    
+    // Increment the test number to get a NEW number
+    err = nvs_increment_testno(&testno);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to increment testno: %s", esp_err_to_name(err));
+        return err;
+    }
+    
+    // Create the new log filename
+    int written = snprintf(log_path, sizeof(log_path), "%s%s%03d%s", 
+                          MOUNT_POINT, filename, testno, LOG_TYPE);
+    
+    // Check if the string was truncated
+    if (written >= sizeof(log_path)) {
+        ESP_LOGE(TAG, "Log filename too long for buffer");
+        return ESP_ERR_INVALID_SIZE;
+    }
+    
+    ESP_LOGI(TAG, "Created new log filename: %s (testno: %u)", log_path, testno);
+
+    //Copy file path into global
+    strncpy(current_log_filepath, log_path, sizeof(current_log_filepath));
+    current_log_filepath[sizeof(current_log_filepath) - 1] = '\0';
+
+    // Open the new log file
+    return open_log_file(log_path);
+}
+
+
+//Public Interface Functions
+// Add this function to allow read-only access from outside
+const char* sdcard_get_current_log_filepath(void) {
+    return current_log_filepath;
+}
+
+// Main Initialization
 void sdcard_init(){
     esp_err_t ret;
     nvs_init();
@@ -438,119 +566,11 @@ void sdcard_init(){
     sdcard_create_numbered_log_file(default_log_filename);
 }
 
-esp_err_t sdcard_create_numbered_log_file(const char *filename){
-    if (filename == NULL) {
-        ESP_LOGE(TAG, "Filename parameter is NULL");
-        return ESP_ERR_INVALID_ARG;
-    }
-    esp_err_t err = validate_filename(filename);
-    if(err != ESP_OK){
-        ESP_LOGE(TAG, "Invalid Filename Format!");
-        return err;
-    }
-    
-    // Create internal buffer of adequate size
-    char log_path[MAX_FILE_NAME_LENGTH];
-    uint8_t testno = 0;
-    
-    // Increment the test number to get a NEW number
-    err = nvs_increment_testno(&testno);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to increment testno: %s", esp_err_to_name(err));
-        return err;
-    }
-    
-    // Create the new log filename
-    int written = snprintf(log_path, sizeof(log_path), "%s%s%03d%s", 
-                          MOUNT_POINT, filename, testno, LOG_TYPE);
-    
-    // Check if the string was truncated
-    if (written >= sizeof(log_path)) {
-        ESP_LOGE(TAG, "Log filename too long for buffer");
-        return ESP_ERR_INVALID_SIZE;
-    }
-    
-    ESP_LOGI(TAG, "Created new log filename: %s (testno: %u)", log_path, testno);
-
-    //Copy file path into global
-    strncpy(current_log_filepath, log_path, sizeof(current_log_filepath));
-    current_log_filepath[sizeof(current_log_filepath) - 1] = '\0';
-
-    // Open the new log file
-    return open_log_file(log_path);
-}
-
-static bool is_valid_fat32_filename_char(char ch) {
-    // FAT32 invalid characters: \ / : * ? " < > |
-    // Also exclude control characters (0-31) and DEL (127)
-    if (ch < 32 || ch == 127) return false;
-    
-    switch (ch) {
-        case '\\':
-        case '/':
-        case ':':
-        case '*':
-        case '?':
-        case '"':
-        case '<':
-        case '>':
-        case '|':
-        case '.':   // Exclude periods as requested
-            return false;
-        default:
-            return true;
-    }
-}
 
 
-//TODO: Add checking the file system for already used filenames, possibly
-static esp_err_t validate_filename(const char *filename) {
-    if (filename == NULL || strlen(filename) == 0) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    
-    size_t len = strlen(filename);
-    
-    // Check length (FAT32 supports up to 255 characters, but let's be conservative)
-    if (len > MAX_FILE_NAME_LENGTH >> 1) {
-        printf("Error: Filename too long (max %d characters)\n", MAX_FILE_NAME_LENGTH >> 1);
-        return ESP_ERR_INVALID_SIZE;
-    }
-    
-    // Check for invalid characters
-    for (size_t i = 0; i < len; i++) {
-        if (!is_valid_fat32_filename_char(filename[i])) {
-            printf("Error: Invalid character '%c' at position %zu\n", filename[i], i);
-            printf("Invalid chars: \\ / : * ? \" < > | .\n");
-            return ESP_ERR_INVALID_ARG;
-        }
-    }
-    
-    // Check for reserved names (case insensitive)
-    const char* reserved_names[] = {
-        "CON", "PRN", "AUX", "NUL",
-        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
-    };
-    
-    for (size_t i = 0; i < sizeof(reserved_names) / sizeof(reserved_names[0]); i++) {
-        if (strcasecmp(filename, reserved_names[i]) == 0) {
-            printf("Error: '%s' is a reserved filename\n", filename);
-            return ESP_ERR_INVALID_ARG;
-        }
-    }
-    
-    // Check that filename doesn't start or end with space
-    if (filename[0] == ' ' || filename[len - 1] == ' ') {
-        printf("Error: Filename cannot start or end with space\n");
-        return ESP_ERR_INVALID_ARG;
-    }
-    
-    return ESP_OK;
-}
 
-// Add this function to allow read-only access from outside
-const char* sdcard_get_current_log_filename(void) {
-    return current_log_filepath;
-}
+
+
+
+
 

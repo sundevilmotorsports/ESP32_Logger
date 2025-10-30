@@ -259,7 +259,7 @@ void uart_output_task(void *param) {
                             nvs_set_log_name(user_input);
                             nvs_set_testno(0);
                             sdcard_create_numbered_log_file(user_input);
-                            printf("Starting new logfile: '%s'\n", sdcard_get_current_log_filename());
+                            printf("Starting new logfile: '%s'\n", sdcard_get_current_log_filepath());
                             break;
                             
                         case ESP_ERR_TIMEOUT:
@@ -283,7 +283,7 @@ void uart_output_task(void *param) {
                     char buffer[32];
                     nvs_get_log_name(buffer, sizeof(buffer));
                     sdcard_create_numbered_log_file(buffer);
-                    printf("Starting new logfile: '%s'\n", sdcard_get_current_log_filename());
+                    printf("Starting new logfile: '%s'\n", sdcard_get_current_log_filepath());
                     break;
                 
 
