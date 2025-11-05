@@ -180,6 +180,12 @@ esp_err_t adc_init( void )
         return ret;
     }
 
+
+
+    return ESP_OK;
+}
+
+esp_err_t adc_start_task(){
     adc_data_mutex = xSemaphoreCreateMutex();
     // Create ADC reading task (high priority for consistent sampling)
     BaseType_t result = xTaskCreate( adc_reading_task, "adc_reader", 4096, NULL, 8, NULL );

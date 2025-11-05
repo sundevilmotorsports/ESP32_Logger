@@ -312,6 +312,8 @@ void app_main(void)
 
     ESP_ERROR_CHECK(uart_create_tasks());
 
+    ESP_ERROR_CHECK(adc_start_task());
+
     if (dtc_start_task() != ESP_OK) {
         ESP_LOGE(TAG, "Failed to create dtc_task");
         return;

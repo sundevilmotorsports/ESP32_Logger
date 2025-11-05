@@ -8,6 +8,11 @@
 #include "esp_vfs_fat.h"
 #include "sdmmc_cmd.h"
 #include "driver/sdmmc_host.h"
+#include <errno.h>
+#include <string.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #define LOG_CHANNEL_NAMES
 #include "log_chnl.h"
@@ -289,8 +294,19 @@ esp_err_t nvs_set_testno(uint8_t testno){
 
 //File Operations
 // Open a new log file
-static esp_err_t open_log_file(const char *filename) {
+static esp_err_t open_log_file(const char *filename_in) {
     xSemaphoreTake(log_file_mutex, portMAX_DELAY);
+
+    // Sanitize input filename: remove trailing CR/LF and control chars
+    char filename[MAX_FILE_NAME_LENGTH];
+    size_t fn_len = strnlen(filename_in, sizeof(filename) - 1);
+    memcpy(filename, filename_in, fn_len);
+    filename[fn_len] = '\0';
+    // strip trailing whitespace and control chars
+    while (fn_len > 0 && (filename[fn_len-1] <= ' ')) {
+        filename[fn_len-1] = '\0';
+        fn_len--;
+    }
     
     // Close existing file if open
     if (log_file != NULL) {
@@ -300,12 +316,37 @@ static esp_err_t open_log_file(const char *filename) {
         ESP_LOGI(TAG, "Closed previous log file");
     }
     
-    // Open new file
+    // Try fopen first (append mode)
     log_file = fopen(filename, "a");
     if (log_file == NULL) {
-        ESP_LOGE(TAG, "Failed to open log file: %s", filename);
-        xSemaphoreGive(log_file_mutex);
-        return ESP_FAIL;
+        ESP_LOGE(TAG, "Failed to fopen('%s'): %s (errno=%d)", filename, strerror(errno), errno);
+
+        // If invalid-argument, dump filename bytes to help debug hidden chars
+        if (errno == EINVAL) {
+            ESP_LOGW(TAG, "Filename bytes (hex):");
+            for (size_t i = 0; i < fn_len; ++i) {
+                printf("%02X ", (unsigned char)filename[i]);
+            }
+            printf("\n");
+        }
+
+        // Fallback: try create with open(O_CREAT|O_RDWR) and then fdopen
+        int fd = open(filename, O_CREAT | O_RDWR, 0666);
+        if (fd >= 0) {
+            // Try to obtain FILE* from fd
+            log_file = fdopen(fd, "a+");
+            if (log_file == NULL) {
+                ESP_LOGE(TAG, "fdopen failed after open: %s (errno=%d)", strerror(errno), errno);
+                close(fd);
+                xSemaphoreGive(log_file_mutex);
+                return ESP_FAIL;
+            }
+            ESP_LOGI(TAG, "Created file '%s' via open()/fdopen() fallback", filename);
+        } else {
+            ESP_LOGE(TAG, "open(O_CREAT|O_RDWR) failed for '%s': %s (errno=%d)", filename, strerror(errno), errno);
+            xSemaphoreGive(log_file_mutex);
+            return ESP_FAIL;
+        }
     }
     
     // Set buffer mode for better performance
@@ -425,7 +466,7 @@ esp_err_t sdcard_create_numbered_log_file(const char *filename){
     }
     
     // Create the new log filename
-    int written = snprintf(log_path, sizeof(log_path), "%s%s%03d%s", 
+    int written = snprintf(log_path, sizeof(log_path), "%s/%s%03d%s", 
                           MOUNT_POINT, filename, testno, LOG_TYPE);
     
     // Check if the string was truncated
@@ -471,82 +512,52 @@ void sdcard_init(){
         return;
     }
 
-    ESP_LOGI(TAG, "Initializing SD card in SPI mode...");
+    ESP_LOGI(TAG, "Initializing SD card using SDMMC (1-bit) with D0 = PIN_NUM_D0");
 
-    // Configure SPI bus for SD card
-    spi_bus_config_t bus_cfg = {
-        .mosi_io_num = GPIO_NUM_12,     // Your CMD pin becomes MOSI
-        .miso_io_num = GPIO_NUM_10,     // Your D0 pin becomes MISO
-        .sclk_io_num = GPIO_NUM_11,     // Your CLK pin
-        .quadwp_io_num = -1,
-        .quadhd_io_num = -1,
-        .max_transfer_sz = 4000,
-    };
+    // Configure SDMMC host for 1-bit (single channel) mode
+    sdmmc_host_t host = SDMMC_HOST_DEFAULT();
+    host.flags = SDMMC_HOST_FLAG_1BIT;   // force 1-bit mode
+    // host.max_freq_khz left as default; lower it if card/board needs it
 
-    ret = spi_bus_initialize(SPI2_HOST, &bus_cfg, SDSPI_DEFAULT_DMA);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize SPI bus: %s", esp_err_to_name(ret));
-        return;
-    }
+    // Configure slot pins - use existing wiring: CMD on GPIO12, CLK on PIN_NUM_CLK, D0 on PIN_NUM_D0
+    sdmmc_slot_config_t slot_config = SDMMC_SLOT_CONFIG_DEFAULT();
+    slot_config.clk  = PIN_NUM_CLK;      // GPIO_NUM_11 per header
+    slot_config.cmd  = PIN_NUM_CMD;      // use previously-used MOSI pin as CMD
+    slot_config.d0   = PIN_NUM_D0;       // SD MISO pin used as D0 (GPIO_NUM_10)
+    slot_config.width = 1;               // single-channel (1-bit) mode
 
-    gpio_config_t cs_config = {
-        .pin_bit_mask = (1ULL << 13),
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE
-    };
-    
-    gpio_config(&cs_config);
-    gpio_set_level(GPIO_NUM_13, 1);
+    // if no card detect / wp pins present, mark them as not used
+    slot_config.cd = SDMMC_SLOT_NO_CD;
+    slot_config.wp = SDMMC_SLOT_NO_WP;
 
-    vTaskDelay(pdMS_TO_TICKS(500));
-
-    // Configure SPI device for SD card
-    sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();
-    slot_config.gpio_cs = GPIO_NUM_13;      // Use D3 as CS
-    slot_config.host_id = SPI2_HOST;
-
-    // Configure SDMMC host for SPI
-    sdmmc_host_t host = SDSPI_HOST_DEFAULT();
-    host.max_freq_khz = 400;  // Start with low frequency
-
-    // Configure mount options
+        // Configure mount options - increase resources and optionally format if mount fails
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
-        .format_if_mount_failed = false,  // Don't auto-format
-        .max_files = 5,
+        .format_if_mount_failed = true,   // temporarily allow format to recover corrupted FS
+        .max_files = 16,                 // increase from 5 to avoid descriptor exhaustion
         .allocation_unit_size = 16 * 1024
     };
 
-    // Mount using SPI mode
-    ret = esp_vfs_fat_sdspi_mount(MOUNT_POINT, &host, &slot_config, &mount_config, &g_card);
-
+    // Mount using SDMMC (not SDSPI)
+    ret = esp_vfs_fat_sdmmc_mount(MOUNT_POINT, &host, &slot_config, &mount_config, &g_card);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to mount SD card in SPI mode: %s", esp_err_to_name(ret));
-        
-        // Try even slower speed
-        host.max_freq_khz = 200;
-        ESP_LOGW(TAG, "Retrying with 200kHz clock...");
-        
-        ret = esp_vfs_fat_sdspi_mount(MOUNT_POINT, &host, &slot_config, &mount_config, &g_card);
-        if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "SD card mount failed even at 200kHz: %s", esp_err_to_name(ret));
-            spi_bus_free(SPI2_HOST);
-            return;
-        }
+        ESP_LOGE(TAG, "Failed to mount SD card using SDMMC (1-bit): %s", esp_err_to_name(ret));
+        return;
     }
 
+    // Small stabilization delay to let the card and VFS settle
+    vTaskDelay(pdMS_TO_TICKS(50));
+
     g_sdcard_initialized = true;
-    ESP_LOGI(TAG, "SD card mounted successfully in SPI mode");
+    ESP_LOGI(TAG, "SD card mounted successfully (SDMMC 1-bit)");
 
     // Rest of your existing code for card info and log file creation...
     if (g_card != NULL) {
         sdmmc_card_print_info(stdout, g_card);
-        
+
         const char* card_type = (g_card->ocr & (1 << 30)) ? "SDHC/SDXC" : "SDSC";
         const char* speed_class = (g_card->csd.tr_speed > 25000000) ? "High Speed" : "Default Speed";
-        
-        ESP_LOGI(TAG, "SD card info: Name: %s, Type: %s, Speed: %s, Size: %lluMB", 
+
+        ESP_LOGI(TAG, "SD card info: Name: %s, Type: %s, Speed: %s, Size: %lluMB",
                  g_card->cid.name, card_type, speed_class,
                  ((uint64_t) g_card->csd.capacity) * g_card->csd.sector_size / (1024 * 1024));
     }
@@ -562,7 +573,7 @@ void sdcard_init(){
             ESP_LOGE(TAG, "Unable to write default log name to NVS");
         }
     }
-    
+
     sdcard_create_numbered_log_file(default_log_filename);
 }
 

@@ -31,7 +31,7 @@
 
 
 esp_err_t adc_init( void );
-
+esp_err_t adc_start_task(void);
 esp_err_t adc_get_values(uint16_t *fbp, uint16_t *rbp, uint16_t *stp, 
                         uint16_t *fls, uint16_t *frs, uint16_t *rrs, uint16_t *rls);
 

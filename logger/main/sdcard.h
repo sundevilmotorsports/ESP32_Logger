@@ -5,18 +5,19 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "sdmmc_cmd.h"
+#include "sdkconfig.h"
 
-#define MOUNT_POINT "/sdcard/"
+#define MOUNT_POINT "/sdcard"
 #define LOG_TYPE ".benji2"
 
-#define MAX_FILE_NAME_LENGTH 128
+#define MAX_FILE_NAME_LENGTH 255
 
 #define PIN_NUM_D0  GPIO_NUM_10  // D0
 #define PIN_NUM_D1  GPIO_NUM_9 // D1
 #define PIN_NUM_D2 GPIO_NUM_14
 #define PIN_NUM_D3 GPIO_NUM_13
 #define PIN_NUM_CLK   GPIO_NUM_11 // CLK
-#define PIN_NUM_CS    13 // CS
+#define PIN_NUM_CMD GPIO_NUM_12
 
 extern FILE *log_file;
 extern SemaphoreHandle_t log_file_mutex;
