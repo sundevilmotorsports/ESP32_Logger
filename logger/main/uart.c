@@ -211,13 +211,13 @@ void uart_output_task(void *param) {
                 case 'a':
                 case 'A':
                     printf("=== Option A: Report Analog ===\n");
-                    printf("Front Brake Pressure: %u\n", (logBuffer[F_BRAKEPRESSURE] << 8) | logBuffer[F_BRAKEPRESSURE1]);
-                    printf("Rear Brake Pressure:  %u\n", (logBuffer[R_BRAKEPRESSURE] << 8) | logBuffer[R_BRAKEPRESSURE1]);
-                    printf("Steering Position:    %u\n", (logBuffer[STEERING] << 8) | logBuffer[STEERING1]);
-                    printf("Front Left Shock:     %u\n", (logBuffer[FLSHOCK] << 8) | logBuffer[FLSHOCK1]);
-                    printf("Front Right Shock:    %u\n", (logBuffer[FRSHOCK] << 8) | logBuffer[FRSHOCK1]);
-                    printf("Rear Left Shock:      %u\n", (logBuffer[RLSHOCK] << 8) | logBuffer[RLSHOCK1]);
-                    printf("Rear Right Shock:     %u\n", (logBuffer[RRSHOCK] << 8) | logBuffer[RRSHOCK1]);
+                    printf("Front Brake Pressure: %u\n", (logBuffer[F_BRAKEPRESSURE1] << 8) | logBuffer[F_BRAKEPRESSURE]);
+                    printf("Rear Brake Pressure:  %u\n", (logBuffer[R_BRAKEPRESSURE1] << 8) | logBuffer[R_BRAKEPRESSURE]);
+                    printf("Steering Position:    %u\n", (logBuffer[STEERING1] << 8) | logBuffer[STEERING]);
+                    printf("Front Left Shock:     %u\n", (logBuffer[FLSHOCK1] << 8) | logBuffer[FLSHOCK]);
+                    printf("Front Right Shock:    %u\n", (logBuffer[FRSHOCK1] << 8) | logBuffer[FRSHOCK]);
+                    printf("Rear Left Shock:      %u\n", (logBuffer[RLSHOCK1] << 8) | logBuffer[RLSHOCK]);
+                    printf("Rear Right Shock:     %u\n", (logBuffer[RRSHOCK1] << 8) | logBuffer[RRSHOCK]);
                     break;
                     
                 case 'd':

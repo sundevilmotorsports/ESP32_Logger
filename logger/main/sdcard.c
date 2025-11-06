@@ -357,43 +357,67 @@ static esp_err_t open_log_file(const char *filename_in) {
     current_log_filepath[sizeof(current_log_filepath) - 1] = '\0';
     
     ESP_LOGI(TAG, "Opened log file: %s", filename);
-    
-    // Build CSV header string
-    char csv_header[2048] = {0};  // Adjust size as needed
+
+    // Build CSV header string (use heap to avoid stack overflow)
+    size_t csv_buf_size = 2048; // initial allocation
+    char *csv_header = malloc(csv_buf_size);
+    if (csv_header == NULL) {
+        ESP_LOGE(TAG, "Not enough heap to allocate CSV header buffer");
+        xSemaphoreGive(log_file_mutex);
+        return ESP_ERR_NO_MEM;
+    }
     size_t header_len = 0;
-    
-    for (int i = 0; i < (sizeof(log_channel_names)/sizeof(log_channel_names[0])) - 1; i++) {
+
+    for (int i = 0; i < (sizeof(log_channel_names)/sizeof(log_channel_names[0])); i++) {
         size_t name_len = strlen(log_channel_names[i]);
-        if (header_len + name_len < sizeof(csv_header) - 1) {  // Leave room for \0
-            memcpy(csv_header + header_len, log_channel_names[i], name_len);
-            header_len += name_len;
-        } else {
-            ESP_LOGW(TAG, "CSV header buffer too small, truncating");
-            break;
+
+        // Grow buffer if necessary
+        if (header_len + name_len >= csv_buf_size) {
+            size_t new_size = csv_buf_size * 2;
+            while (header_len + name_len >= new_size) new_size *= 2;
+            char *tmp = realloc(csv_header, new_size);
+            if (tmp == NULL) {
+                ESP_LOGE(TAG, "Failed to grow CSV header buffer");
+                free(csv_header);
+                xSemaphoreGive(log_file_mutex);
+                return ESP_ERR_NO_MEM;
+            }
+            csv_header = tmp;
+            csv_buf_size = new_size;
         }
+
+        memcpy(csv_header + header_len, log_channel_names[i], name_len);
+        header_len += name_len;
     }
 
+
+
     // Write header length as first 4 bytes (little-endian format)
-    uint32_t header_len_le = header_len;  // Convert to little-endian if needed
+    uint32_t header_len_le = (uint32_t)header_len;
     size_t len_written = fwrite(&header_len_le, sizeof(uint32_t), 1, log_file);
     if (len_written != 1) {
         ESP_LOGE(TAG, "Failed to write header length");
         fclose(log_file);
         log_file = NULL;
+        free(csv_header);
         xSemaphoreGive(log_file_mutex);
         return ESP_FAIL;
     }
-    
+
     // Write CSV header data
     size_t written = fwrite(csv_header, 1, header_len, log_file);
     if (written != header_len) {
         ESP_LOGE(TAG, "Failed to write CSV header");
         fclose(log_file);
         log_file = NULL;
+        free(csv_header);
         xSemaphoreGive(log_file_mutex);
         return ESP_FAIL;
     }
-    
+
+    // Clean up
+    free(csv_header);
+
     // Flush to ensure header is written immediately
     fflush(log_file);
     
@@ -441,6 +465,20 @@ esp_err_t fast_log_buffer(const uint8_t *data_buffer, uint8_t buffer_len) {
     xSemaphoreGive(log_file_mutex);
     
     return result;
+}
+
+void sdcard_sync( void ){
+    if(xSemaphoreTake(log_file_mutex, pdMS_TO_TICKS(200))){
+        if(log_file != NULL){
+            fflush(log_file);
+
+            int fd = fileno(log_file);
+            if(fd >= 0) {
+                fsync(fd);
+            }
+        }
+        xSemaphoreGive(log_file_mutex);
+    }
 }
 
 esp_err_t sdcard_create_numbered_log_file(const char *filename){

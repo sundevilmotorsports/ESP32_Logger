@@ -10,36 +10,16 @@
 #define ADC_CS      GPIO_NUM_4
 
 
-typedef struct {
-    uint16_t adc0;
-    uint16_t adc1;
-    uint16_t adc2;
-    uint16_t adc3;
-    uint16_t adc4;
-    uint16_t adc5;
-    uint16_t adc6;
-    uint16_t adc7;
-} adc_values_t;
 
 
 static const char *TAG = "ADC";
 
-uint16_t frontBrakePress = 0;
-uint16_t rearBrakePress = 0;
-uint16_t steerPos = 0;
-uint16_t flShock = 0;
-uint16_t frShock = 0;
-uint16_t rlShock = 0;
-uint16_t rrShock = 0;
 
 static SemaphoreHandle_t adc_data_mutex = NULL;
 
 static spi_device_handle_t spi_handle;
 static adc_values_t adc_local;
 
-
-static void read_all_channels( void );
-static void adc_reading_task( void *pvParameters );
 
 
 static void read_all_channels( void )
@@ -94,38 +74,24 @@ static void read_all_channels( void )
     // ESP_LOGI( TAG, " ---------------------------" );
 }
 
-static void adc_reading_task( void *pvParameters ) 
+// NEW: synchronous read API
+esp_err_t adc_read_sync(adc_values_t *out)
 {
-    const TickType_t xFrequency = pdMS_TO_TICKS( 10 ); // 100Hz sampling rate
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-    
-    ESP_LOGI( TAG, "ADC reading task started at 100Hz" );
-    
-    while (1) {
-        // Wait for the next cycle
-        vTaskDelayUntil( &xLastWakeTime, xFrequency );
-
-        read_all_channels();
-        
-        // Update global variables atomically
-        if ( xSemaphoreTake( adc_data_mutex, pdMS_TO_TICKS( 5 ) ) == pdTRUE ) 
-        {
-            frontBrakePress = adc_local.adc0;
-            rearBrakePress = adc_local.adc1;
-            steerPos = adc_local.adc2;
-            frShock = adc_local.adc3;
-            flShock = adc_local.adc4;
-            rlShock = adc_local.adc6;
-            rrShock = adc_local.adc7;
-            xSemaphoreGive( adc_data_mutex );
-        } 
-        else 
-        {
-            ESP_LOGW( TAG, "Failed to acquire ADC mutex for writing" );
-        }
+    if (spi_handle == NULL) {
+        ESP_LOGE(TAG, "SPI device not initialized");
+        return ESP_ERR_INVALID_STATE;
     }
-}
 
+    // perform a blocking read into adc_local
+    read_all_channels();
+
+
+    if (out) {
+        memcpy(out, &adc_local, sizeof(adc_local));
+    }
+
+    return ESP_OK;
+}
 
 esp_err_t adc_init( void ) 
 {
@@ -185,18 +151,7 @@ esp_err_t adc_init( void )
     return ESP_OK;
 }
 
-esp_err_t adc_start_task(){
-    adc_data_mutex = xSemaphoreCreateMutex();
-    // Create ADC reading task (high priority for consistent sampling)
-    BaseType_t result = xTaskCreate( adc_reading_task, "adc_reader", 4096, NULL, 8, NULL );
 
-    if ( result != pdPASS ) {
-        ESP_LOGE( TAG, "Failed to create ADC reading task" );
-        return ESP_FAIL;
-    }
-
-    return ESP_OK;
-}
 
 
 void adc_deinit( void ) {
@@ -208,26 +163,3 @@ void adc_deinit( void ) {
     spi_bus_free( SPI3_HOST );
 }
 
-
-esp_err_t adc_get_values( uint16_t *fbp, uint16_t *rbp, uint16_t *stp, 
-                        uint16_t *fls, uint16_t *frs, uint16_t *rrs, uint16_t *rls ) 
-{
-    if ( xSemaphoreTake( adc_data_mutex, pdMS_TO_TICKS( 1 ) ) == pdTRUE ) 
-    {
-        *fbp = frontBrakePress;
-        *rbp = rearBrakePress;
-        *stp = steerPos;
-        *fls = flShock;
-        *frs = frShock;
-        *rrs = rrShock;
-        *rls = rlShock;
-        
-        xSemaphoreGive( adc_data_mutex );
-        return ESP_OK;
-    } 
-    else 
-    {
-        ESP_LOGW( TAG, "Failed to acquire ADC mutex for reading" );
-        return ESP_ERR_TIMEOUT;
-    }
-}

@@ -10,6 +10,10 @@
     X(TS1) \
     X(TS2) \
     X(TS3) \
+    X(TS4) \
+    X(TS5) \
+    X(TS6) \
+    X(TS7) \
     X(F_BRAKEPRESSURE) \
     X(F_BRAKEPRESSURE1) \
     X(R_BRAKEPRESSURE) \

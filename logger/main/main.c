@@ -202,22 +202,24 @@ static void process_can_message(twai_frame_t *message) {
 
 
 void logBuffer_task(void *pvParamaters){
-    uint16_t fbp, rbp, stp, fls, frs, rrs, rls;
+    adc_values_t adc_vals;
     
+    // track last sync time (ticks)
+    TickType_t last_sync_tick = 0;
     while(1){
 
 
         // //Log Analog Sensor Data
         // Get ADC values quickly (no SPI operations here)
-        if (adc_get_values(&fbp, &rbp, &stp, &fls, &frs, &rrs, &rls) == ESP_OK) {
+        if (adc_read_sync(&adc_vals) == ESP_OK) {
             // Log Analog Sensor Data using cached values
-            loggerEmplaceU16(logBuffer, F_BRAKEPRESSURE, fbp);
-            loggerEmplaceU16(logBuffer, R_BRAKEPRESSURE, rbp);
-            loggerEmplaceU16(logBuffer, STEERING, stp);
-            loggerEmplaceU16(logBuffer, FLSHOCK, fls);
-            loggerEmplaceU16(logBuffer, FRSHOCK, frs);
-            loggerEmplaceU16(logBuffer, RRSHOCK, rrs);
-            loggerEmplaceU16(logBuffer, RLSHOCK, rls);
+            loggerEmplaceU16(logBuffer, F_BRAKEPRESSURE, adc_vals.adc0);
+            loggerEmplaceU16(logBuffer, R_BRAKEPRESSURE, adc_vals.adc1);
+            loggerEmplaceU16(logBuffer, STEERING, adc_vals.adc2);
+            loggerEmplaceU16(logBuffer, FLSHOCK, adc_vals.adc3);
+            loggerEmplaceU16(logBuffer, FRSHOCK, adc_vals.adc4);
+            loggerEmplaceU16(logBuffer, RRSHOCK, adc_vals.adc6);
+            loggerEmplaceU16(logBuffer, RLSHOCK, adc_vals.adc7);
         } else {
             ESP_LOGW(TAG, "Using previous ADC values due to mutex timeout");
         }
@@ -285,11 +287,24 @@ void logBuffer_task(void *pvParamaters){
         logBuffer[GPS_0_]   = dtc_devices[gps_0_DTC]->errState;
         logBuffer[GPS_1_]   = dtc_devices[gps_1_DTC]->errState;
 
-        // // Write Data to SD Card - mutex handling is internal
-        // esp_err_t result = fast_log_buffer(logBuffer, CH_COUNT);
-        // if (result != ESP_OK) {
-        //     ESP_LOGW(TAG, "Failed to write log buffer to SD card");
-        // }
+        loggerEmplaceU64(logBuffer, TS, (uint64_t)esp_timer_get_time());
+
+        // Write Data to SD Card - mutex handling is internal
+        esp_err_t result = fast_log_buffer(logBuffer, CH_COUNT);
+        if (result != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to write log buffer to SD card");
+        }
+
+        // Call sdcard_sync() every 1 second to flush buffers to persistent storage
+        if (last_sync_tick == 0) {
+            last_sync_tick = xTaskGetTickCount();
+        } else {
+            TickType_t now = xTaskGetTickCount();
+            if ((now - last_sync_tick) >= pdMS_TO_TICKS(1000)) {
+                sdcard_sync();
+                last_sync_tick = now;
+            }
+        }
 
     }
 }
@@ -311,8 +326,6 @@ void app_main(void)
     
 
     ESP_ERROR_CHECK(uart_create_tasks());
-
-    ESP_ERROR_CHECK(adc_start_task());
 
     if (dtc_start_task() != ESP_OK) {
         ESP_LOGE(TAG, "Failed to create dtc_task");

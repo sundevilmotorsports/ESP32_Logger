@@ -29,11 +29,19 @@
 //     esp_err_t error;
 // } ADC_Result;
 
+typedef struct {
+    uint16_t adc0;
+    uint16_t adc1;
+    uint16_t adc2;
+    uint16_t adc3;
+    uint16_t adc4;
+    uint16_t adc5;
+    uint16_t adc6;
+    uint16_t adc7;
+} adc_values_t;
 
 esp_err_t adc_init( void );
-esp_err_t adc_start_task(void);
-esp_err_t adc_get_values(uint16_t *fbp, uint16_t *rbp, uint16_t *stp, 
-                        uint16_t *fls, uint16_t *frs, uint16_t *rrs, uint16_t *rls);
+esp_err_t adc_read_sync(adc_values_t *out);
 
 
 #endif /* ADC_H_ */

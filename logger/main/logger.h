@@ -16,5 +16,6 @@
 
 void loggerEmplaceU16(uint8_t* buffer, size_t addr, uint16_t data);
 void loggerEmplaceU32(uint8_t* buffer, size_t addr, uint32_t data);
+void loggerEmplaceU64(uint8_t* buffer, size_t addr, uint64_t data);
 void loggerEmplaceCAN(uint8_t* buffer, size_t addr, uint8_t* msg);
 #endif /* INC_LOGGER_H_ */

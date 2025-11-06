@@ -82,6 +82,26 @@ esp_err_t sdcard_create_numbered_log_file(const char *filename);
 const char* sdcard_get_current_log_filepath(void);
 
 // ============================================================================
+// FILE SYNC
+// ============================================================================
+
+/**
+ * @brief Flush and sync the active log file to persistent storage
+ *
+ * This function:
+ *  - Attempts to take the internal log file mutex (`log_file_mutex`)
+ *  - Calls fflush() on the open FILE* (`log_file`) to flush stdio buffers
+ *  - Calls fsync() on the file descriptor returned by fileno(log_file) to
+ *    flush OS/device caches to the SD card
+ *  - Releases the mutex
+ *
+ * Use this to reduce data loss risk on unexpected power loss. The call is
+ * safe to call from multiple contexts; it will time out if the mutex cannot be
+ * acquired.
+ */
+void sdcard_sync(void);
+
+// ============================================================================
 // NVS (NON-VOLATILE STORAGE) FUNCTIONS
 // ============================================================================
 
