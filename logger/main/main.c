@@ -18,6 +18,8 @@
 #include "log_chnl.h"
 #include "uart.h"
 
+#define REFRESH_HZ 500
+
 uint8_t logBuffer[CH_COUNT];
 uint8_t usbBuffer[64];
 
@@ -38,8 +40,6 @@ typedef struct {
 uint8_t				  TXDAT[8];
 uint32_t count = 0;
 uint32_t imuCount = 0;
-uint32_t xAccel = 0, yAccel = 0, zAccel = 0;
-uint32_t xGyro = 0, yGyro = 0, zGyro = 0;
 uint16_t frsg = 0, flsg = 0, rrsg = 0, rlsg = 0;
 wheel_data_s_t frw, flw, rlw, rrw;
 uint8_t testNo = 0;
@@ -49,6 +49,8 @@ uint16_t brakeFluid = 0, throttleLoad = 0, brakeLoad = 0;
 uint16_t oilPress = 0, driven_wspd = 0;
 uint8_t ect = 0, tps = 0, aps = 0, shift0 = 0, shift1 = 0, shift2 = 0;
 
+imu_accel_t imu_accel;
+imu_gyro_t  imu_gyro;
 
 
 
@@ -60,34 +62,13 @@ static void process_can_message(twai_frame_t *message) {
         case 0x35F:
             drs = data[0];
             break;
-            
+        //IMU Data Handling
         case 0x360:
-            //IMU Data
-            xAccel = data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3];
-            yAccel = data[4] << 24 | data[5] << 16 | data[6] << 8 | data[7];
-            imuCount++;
-            
-            //IMU DTC Check
-            break;
-            
+        memcpy(&imu_gyro, data, 6);
+        break;
         case 0x361:
-            //IMU Data
-            zAccel = data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3];
-            xGyro = data[4] << 24 | data[5] << 16 | data[6] << 8 | data[7];
-            imuCount++;
-
-            //IMU DTC Check
-            break;
-            
-        case 0x362:
-            //IMU Data
-            yGyro = data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3];
-            zGyro = data[4] << 24 | data[5] << 16 | data[6] << 8 | data[7];
-            imuCount++;
-
-            //IMU DTC Response Update
-            DTC_CAN_Response_Measurement(dtc_devices[imu_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
-            break;
+        memcpy(&imu_accel, data, 6);
+        break;
             
         case 0x363:
             //Front Left Wheel Board
@@ -204,10 +185,15 @@ static void process_can_message(twai_frame_t *message) {
 void logBuffer_task(void *pvParamaters){
     adc_values_t adc_vals;
     
+
+    //TODO: Break out the SD Card Sync into its own task
     // track last sync time (ticks)
     TickType_t last_sync_tick = 0;
-    while(1){
 
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+    const TickType_t xPeriod = pdMS_TO_TICKS(1000 / REFRESH_HZ);
+    while(1){
+        // vTaskDelayUntil(&xLastWakeTime, xPeriod);
 
         // //Log Analog Sensor Data
         // Get ADC values quickly (no SPI operations here)
@@ -231,13 +217,13 @@ void logBuffer_task(void *pvParamaters){
         loggerEmplaceU16(logBuffer, BATTERY, getVoltage());
 
         //Report IMU Data
-        loggerEmplaceU32(logBuffer, IMU_X_ACCEL, xAccel);
-        loggerEmplaceU32(logBuffer, IMU_Y_ACCEL, yAccel);
-        loggerEmplaceU32(logBuffer, IMU_Z_ACCEL, zAccel);
+        loggerEmplaceU16(logBuffer, IMU_X_ACCEL, imu_accel.x);
+        loggerEmplaceU16(logBuffer, IMU_Y_ACCEL, imu_accel.y);
+        loggerEmplaceU16(logBuffer, IMU_Z_ACCEL, imu_accel.z);
 
-        loggerEmplaceU32(logBuffer, IMU_X_GYRO, xGyro);
-        loggerEmplaceU32(logBuffer, IMU_Y_GYRO, yGyro);
-        loggerEmplaceU32(logBuffer, IMU_Z_GYRO, zGyro);
+        loggerEmplaceU16(logBuffer, IMU_X_GYRO, imu_gyro.x);
+        loggerEmplaceU16(logBuffer, IMU_Y_GYRO, imu_gyro.y);
+        loggerEmplaceU16(logBuffer, IMU_Z_GYRO, imu_gyro.z);
 
         //Report Wheel Board Sensor Data
         loggerEmplaceU16(logBuffer, FLW_AMB, flw.ambTemp);
@@ -288,6 +274,12 @@ void logBuffer_task(void *pvParamaters){
         logBuffer[GPS_1_]   = dtc_devices[gps_1_DTC]->errState;
 
         loggerEmplaceU64(logBuffer, TS, (uint64_t)esp_timer_get_time());
+
+        loggerEmplaceU32(logBuffer, GPS_LAT, GNSS_Handle.lat);
+        loggerEmplaceU32(logBuffer, GPS_LON, GNSS_Handle.lon);
+        loggerEmplaceU32(logBuffer, GPS_SPD, GNSS_Handle.gSpeed);
+        logBuffer[GPS_FIX] = GNSS_Handle.fixType;
+        
 
         // Write Data to SD Card - mutex handling is internal
         esp_err_t result = fast_log_buffer(logBuffer, CH_COUNT);

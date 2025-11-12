@@ -9,8 +9,10 @@
 static const char *TAG = "CAN";
 
 #define BITRATE 1000000
-#define TX GPIO_NUM_18
-#define RX GPIO_NUM_8
+
+//Switched these, spotted a possible issue with schematic naming
+#define TX GPIO_NUM_8
+#define RX GPIO_NUM_18
 
 twai_node_handle_t hfdcan = NULL;
 
@@ -22,8 +24,11 @@ static SemaphoreHandle_t rx_sem;
 
 static can_message_callback_t process = NULL;
 
+uint32_t can_msg_count = 0;
+
 static bool can_rx_cb(twai_node_handle_t handle, const twai_rx_done_event_data_t *edata, void *user_ctx)
 {
+    can_msg_count++;
     uint8_t recv_buff[64];
     twai_frame_t rx_frame = {
         .buffer = recv_buff,

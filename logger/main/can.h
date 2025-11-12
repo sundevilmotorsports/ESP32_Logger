@@ -6,6 +6,7 @@
 #include "freertos/FreeRTOS.h"
 
 extern twai_node_handle_t hfdcan;
+extern uint32_t can_msg_count;
 
 typedef struct {
         twai_frame_header_t header;

@@ -138,6 +138,22 @@ enum LogChannel {
 
 extern uint8_t logBuffer[CH_COUNT];
 
+typedef struct{
+    int16_t x;
+    int16_t y;
+    int16_t z;
+} imu_accel_t;
+
+typedef struct{
+    int16_t x;
+    int16_t y;
+    int16_t z;
+} imu_gyro_t;
+
+extern imu_accel_t imu_accel;
+extern imu_gyro_t  imu_gyro;
+extern uint8_t ect, tps, aps, shift0, shift1, shift2;
+
 
 // Optional: Generate string names for debugging/logging
 #ifdef LOG_CHANNEL_NAMES

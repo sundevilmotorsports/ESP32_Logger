@@ -66,10 +66,10 @@ esp_err_t dtc_start_task(void) {
  * @param threshold Additional time above average before triggering error (in ms)
  * @param start_time Initial time to set for totalTime and prevTime
  * 
- * @note Memory allocation failure will set errState to 1 and log an error
+ * @note Memory allocation failure will set errState to 0 and log an error
  */
 void DTC_CAN_Init_Device(can_dtc *dtc, uint8_t index, uint8_t measures, uint16_t threshold, uint64_t start_time){
-    dtc->errState = 0; // Clear error state
+    dtc->errState = 1; // Clear error state
     dtc->DTC_Idx = index; // Set DTC index
     dtc->measures = measures; // Set goal number of measurements
     dtc->bufferIndex = 0; // Initialize buffer index
@@ -80,7 +80,7 @@ void DTC_CAN_Init_Device(can_dtc *dtc, uint8_t index, uint8_t measures, uint16_t
 
     if (dtc->timeBuffer == NULL) {
         // Handle memory allocation failure
-        dtc->errState = 1; // Set error state
+        dtc->errState = 0; // Set error state
         ESP_LOGE(TAG, "Failed to allocate memory for DTC time buffer -> Index: %d", index);
     }
     for (int i = 0; i < measures; i++) {

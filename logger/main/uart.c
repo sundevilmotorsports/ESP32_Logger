@@ -10,6 +10,8 @@
 #include "sdcard.h"
 #include "esp_task_wdt.h"
 #include "log_chnl.h"
+#include "can.h"
+
 
 static const char *TAG = "UART_MODULE";
 
@@ -219,6 +221,12 @@ void uart_output_task(void *param) {
                     printf("Rear Left Shock:      %u\n", (logBuffer[RLSHOCK1] << 8) | logBuffer[RLSHOCK]);
                     printf("Rear Right Shock:     %u\n", (logBuffer[RRSHOCK1] << 8) | logBuffer[RRSHOCK]);
                     break;
+                
+                case 'c':
+                case 'C':
+                    printf("=== Option C: CAN Message Debug ===\n");
+                    printf("# of msgs: %lu\n", can_msg_count);
+                    break;
                     
                 case 'd':
                 case 'D':
@@ -305,11 +313,67 @@ void uart_output_task(void *param) {
                     printf("ESC - Clear screen\n");
                     printf("================================\n");
                     break;
+                case 'g':
+                case 'G':
+                    // Reconstruct little-endian 32-bit signed values from logBuffer
+                    int32_t gps_lon = (int32_t)(
+                        (uint32_t)logBuffer[GPS_LON] |
+                        ((uint32_t)logBuffer[GPS_LON1] << 8) |
+                        ((uint32_t)logBuffer[GPS_LON2] << 16) |
+                        ((uint32_t)logBuffer[GPS_LON3] << 24)
+                        );
+                    int32_t gps_lat = (int32_t)(
+                        (uint32_t)logBuffer[GPS_LAT] |
+                        ((uint32_t)logBuffer[GPS_LAT1] << 8) |
+                        ((uint32_t)logBuffer[GPS_LAT2] << 16) |
+                        ((uint32_t)logBuffer[GPS_LAT3] << 24)
+                    );
+                    printf("=== Display GPS Info ===\n");
+                    printf("GPS -> LON: %ld\tLAT: %ld\tFIX: %d\n", gps_lon, gps_lat, logBuffer[GPS_FIX]);
+                    break;
                 case 'r':
                 case 'R':
                     printf("=== Restarting ESP32 ===\n");
                     vTaskDelay(pdMS_TO_TICKS(1000));
                     esp_restart();
+                    break;
+                case 's':
+                case 'S':
+                    printf("=== Display Shift Info ===\n");
+                    printf("Shift -> [0]: %d\t[1]: %d\t[2]: %d\r\n", shift0, shift1, shift2);
+                    break;
+
+                case 't':
+                case 'T':
+                    printf("=== Display IMU Data ===\n");
+                    printf("IMU Accel -> X: %d\tY: %d\tZ: %d\n", imu_accel.x, imu_accel.y, imu_accel.z);
+                    printf("IMU Gyro  -> X: %d\tY: %d\tZ: %d\n", imu_gyro.x, imu_gyro.y, imu_gyro.z);
+                    break;
+                case 'w':
+                case 'W':
+                    printf("=== Display Wheel Board Info ===\n");
+                    /* Recombine 16-bit values stored as two bytes in logBuffer:
+                       high byte at *_1 index, low byte at base index (see main.c usage) */
+                    uint16_t flw_rpm = (uint16_t)((logBuffer[FLW_RPM1] << 8) | logBuffer[FLW_RPM]);
+                    float flw_obj = (float)(((uint16_t)((logBuffer[FLW_OBJ1] << 8) | logBuffer[FLW_OBJ]))*0.02 - 273.15);
+                    float flw_amb = (float)(((uint16_t)((logBuffer[FLW_AMB1] << 8) | logBuffer[FLW_AMB]))*0.02 - 273.15);
+
+                    uint16_t frw_rpm = (uint16_t)((logBuffer[FRW_RPM1] << 8) | logBuffer[FRW_RPM]);
+                    float frw_obj = (float)(((uint16_t)((logBuffer[FRW_OBJ1] << 8) | logBuffer[FRW_OBJ]))*0.02 - 273.15);
+                    float frw_amb = (float)(((uint16_t)((logBuffer[FRW_AMB1] << 8) | logBuffer[FRW_AMB]))*0.02 - 273.15);
+
+                    uint16_t rrw_rpm = (uint16_t)((logBuffer[RRW_RPM1] << 8) | logBuffer[RRW_RPM]);
+                    float rrw_obj = (float)(((uint16_t)((logBuffer[RRW_OBJ1] << 8) | logBuffer[RRW_OBJ]))*0.02 - 273.15);
+                    float rrw_amb = (float)(((uint16_t)((logBuffer[RRW_AMB1] << 8) | logBuffer[RRW_AMB]))*0.02 - 273.15);
+
+                    uint16_t rlw_rpm = (uint16_t)((logBuffer[RLW_RPM1] << 8) | logBuffer[RLW_RPM]);
+                    float rlw_obj = (float)(((uint16_t)((logBuffer[RLW_OBJ1] << 8) | logBuffer[RLW_OBJ]))*0.02 - 273.15);
+                    float rlw_amb = (float)(((uint16_t)((logBuffer[RLW_AMB1] << 8) | logBuffer[RLW_AMB]))*0.02 - 273.15);
+
+                    printf("FLW -> RPM: %u\tAMB: %.2f\tOBJ: %.2f\n", flw_rpm, flw_amb, flw_obj);
+                    printf("FRW -> RPM: %u\tAMB: %.2f\tOBJ: %.2f\n", frw_rpm, frw_amb, frw_obj);
+                    printf("RRW -> RPM: %u\tAMB: %.2f\tOBJ: %.2f\n", rrw_rpm, rrw_amb, rrw_obj);
+                    printf("RLW -> RPM: %u\tAMB: %.2f\tOBJ: %.2f\n", rlw_rpm, rlw_amb, rlw_obj);
                     break;
                 case 27: // ESC key
                     printf("\033[2J\033[H"); // Clear screen and move cursor to top
