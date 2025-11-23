@@ -339,8 +339,9 @@ void uart_output_task(void *param) {
                     break;
                 case 's':
                 case 'S':
-                    printf("=== Display Shift Info ===\n");
-                    printf("Shift -> [0]: %d\t[1]: %d\t[2]: %d\r\n", shift0, shift1, shift2);
+                    float angle = (0.084769f) * (float)((uint16_t)(logBuffer[STEERING1] << 8 | logBuffer[STEERING])) - (152.846451f);                  
+                    printf("=== Display Steering Info ===\n");
+                    printf("Steer Angle: %.2f deg\r\n", angle);
                     break;
 
                 case 't':

@@ -340,7 +340,7 @@ void app_main(void)
     // Main loop - keep system alive
     while(1) {
         vTaskDelay(pdMS_TO_TICKS(5000));
-        ESP_LOGI(TAG, "System heartbeat - Free heap: %ld bytes", esp_get_free_heap_size());
+        // ESP_LOGI(TAG, "System heartbeat - Free heap: %ld bytes", esp_get_free_heap_size());
     }
 }
 
