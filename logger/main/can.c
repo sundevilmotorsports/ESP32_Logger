@@ -3,10 +3,7 @@
 #include "esp_twai_onchip.h"
 #include <esp_err.h>
 #include "freertos/FreeRTOS.h"
-#include "esp_log.h"
-
-
-static const char *TAG = "CAN";
+#include <string.h>
 
 #define BITRATE 1000000
 
@@ -18,9 +15,6 @@ twai_node_handle_t hfdcan = NULL;
 
 // Queue to store received messages
 static QueueHandle_t rx_queue;
-
-// Semaphore for synchronization
-static SemaphoreHandle_t rx_sem;
 
 static can_message_callback_t process = NULL;
 
@@ -38,15 +32,14 @@ static bool can_rx_cb(twai_node_handle_t handle, const twai_rx_done_event_data_t
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     
     if (ESP_OK == twai_node_receive_from_isr(handle, &rx_frame)) {
-        // Create a safe copy with embedded data
-        typedef struct {
-            twai_frame_header_t header;
-            uint8_t data[64];  // Actual data copy, not pointer
-        } safe_can_frame_t;
-        
         safe_can_frame_t safe_frame;
         safe_frame.header = rx_frame.header;
-        memcpy(safe_frame.data, rx_frame.buffer, rx_frame.header.dlc);
+        uint8_t dlc = rx_frame.header.dlc;
+        if (dlc > sizeof(safe_frame.data)) {
+            dlc = sizeof(safe_frame.data);
+        }
+        safe_frame.header.dlc = dlc;
+        memcpy(safe_frame.data, rx_frame.buffer, dlc);
         
         xQueueSendFromISR(rx_queue, &safe_frame, &xHigherPriorityTaskWoken);
         
@@ -57,13 +50,11 @@ static bool can_rx_cb(twai_node_handle_t handle, const twai_rx_done_event_data_t
     return false;
 }
 
-static void can_receive_task(void *pvParameters) {
-
-    
+void can_receive_task(void *pvParameters) {
     safe_can_frame_t rx_frame;
     
     while (1) {
-        if (xQueueReceive(rx_queue, &rx_frame, pdMS_TO_TICKS(100)) == pdPASS) {
+        if (xQueueReceive(rx_queue, &rx_frame, portMAX_DELAY) == pdPASS) {
             // Convert to the format your callback expects
             twai_frame_t processed_frame = {
                 .header = rx_frame.header,
@@ -75,18 +66,13 @@ static void can_receive_task(void *pvParameters) {
                 process(&processed_frame);  // ✅ SAFE
             }
         }
-        
-        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
 
 void can_init(can_message_callback_t callback_function){
     process = callback_function;
     // Create queue for received messages
-    rx_queue = xQueueCreate(10, sizeof(safe_can_frame_t));
-    
-    // Create semaphore for RX notifications
-    rx_sem = xSemaphoreCreateBinary();
+    rx_queue = xQueueCreate(64, sizeof(safe_can_frame_t));
 
         // Configure TWAI node with ISR callback
     const twai_onchip_node_config_t can_config = {
@@ -107,11 +93,4 @@ void can_init(can_message_callback_t callback_function){
     ESP_ERROR_CHECK(twai_new_node_onchip(&can_config, &hfdcan));
     ESP_ERROR_CHECK(twai_node_register_event_callbacks(hfdcan, &callbacks, NULL));
     ESP_ERROR_CHECK(twai_node_enable(hfdcan));
-
-    BaseType_t result = xTaskCreate(can_receive_task, "can_rx", 4096, NULL, 5, NULL);
-    if (result != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create can_receive_task");
-        return;
-    }
-
 }

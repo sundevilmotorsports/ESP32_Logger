@@ -76,7 +76,6 @@ void DTC_Init(uint64_t start_time);
 void DTC_Error_Check(uint64_t current_time);
 
 void dtc_task(void *pvParameters);
-esp_err_t dtc_start_task(void);
 
 
 #endif

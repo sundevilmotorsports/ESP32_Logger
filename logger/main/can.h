@@ -8,6 +8,7 @@
 extern twai_node_handle_t hfdcan;
 extern uint32_t can_msg_count;
 
+// Queue-safe CAN frame with embedded data storage to avoid dangling pointers.
 typedef struct {
         twai_frame_header_t header;
         uint8_t data[64];
@@ -18,4 +19,5 @@ typedef void (*can_message_callback_t)(twai_frame_t *message);
 
 
 void can_init(can_message_callback_t callback_function);
+void can_receive_task(void *pvParameters);
 #endif

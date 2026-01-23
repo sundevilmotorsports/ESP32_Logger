@@ -34,26 +34,6 @@ void dtc_task(void *pvParameters) {
     }
 }
 
-// Optional helper function to create and start the DTC task
-esp_err_t dtc_start_task(void) {
-    BaseType_t result = xTaskCreate(
-        dtc_task,           // Function
-        "dtc_check",        // Name
-        2048,              // Stack size
-        NULL,              // Parameters
-        6,                 // Priority
-        NULL               // Task handle
-    );
-    
-    if (result != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create DTC task");
-        return ESP_FAIL;
-    }
-    
-    ESP_LOGI(TAG, "DTC task created successfully");
-    return ESP_OK;
-}
-
 /**
  * @brief Initialize a CAN DTC (Diagnostic Trouble Code) structure
  * 

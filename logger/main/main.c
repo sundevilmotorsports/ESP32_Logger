@@ -17,6 +17,7 @@
 #include "sdcard.h"
 #include "log_chnl.h"
 #include "uart.h"
+#include "tasks.h"
 
 #define REFRESH_HZ 500
 
@@ -193,7 +194,7 @@ void logBuffer_task(void *pvParamaters){
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xPeriod = pdMS_TO_TICKS(1000 / REFRESH_HZ);
     while(1){
-        // vTaskDelayUntil(&xLastWakeTime, xPeriod);
+        vTaskDelayUntil(&xLastWakeTime, xPeriod);
 
         // //Log Analog Sensor Data
         // Get ADC values quickly (no SPI operations here)
@@ -315,25 +316,10 @@ void app_main(void)
     adc_init();
     can_init(process_can_message);
 
-    
-
-    ESP_ERROR_CHECK(uart_create_tasks());
-
-    if (dtc_start_task() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to create dtc_task");
+    if (tasks_start_all() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start RTOS tasks");
         return;
     }
-
-
-    gnss_start_task();
-
-        // Create ADC reading task (high priority for consistent sampling)
-    BaseType_t result = xTaskCreate(logBuffer_task, "log buffer", 4096, NULL, 8, NULL);
-    if (result != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create Logging task");
-    }
-
-    ESP_LOGI(TAG, "All tasks created successfully");
     
     // Show welcome message and help
     vTaskDelay(pdMS_TO_TICKS(500)); // Wait for tasks to start
@@ -343,4 +329,3 @@ void app_main(void)
         // ESP_LOGI(TAG, "System heartbeat - Free heap: %ld bytes", esp_get_free_heap_size());
     }
 }
-

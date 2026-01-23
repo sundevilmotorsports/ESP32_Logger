@@ -14,7 +14,7 @@
 
 static const char *TAG = "GNSS_DMA";
 static QueueHandle_t neo_uart_event_queue = NULL;
-static TaskHandle_t gnss_task_handle = NULL;
+TaskHandle_t gnss_task_handle = NULL;
 static uint8_t *dma_buffer = NULL;
 
 GNSS_StateHandle GNSS_Handle = {0};
@@ -196,7 +196,7 @@ static void process_nmea_sentence(const char* sentence, size_t len) {
     }
 }
 
-static void neo_uart_task(void *pvParameters) {
+void gnss_uart_task(void *pvParameters) {
     uart_event_t event;
     size_t buffered_size;
 
@@ -275,12 +275,6 @@ static void neo_uart_task(void *pvParameters) {
                     break;
             }
         }
-    }
-}
-
-void gnss_start_task(void) {
-    if (gnss_task_handle == NULL) {
-        xTaskCreate(neo_uart_task, "gnss_uart_task", 4096, NULL, 10, &gnss_task_handle);
     }
 }
 
