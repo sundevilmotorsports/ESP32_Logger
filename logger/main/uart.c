@@ -77,26 +77,6 @@ esp_err_t uart_init(void) {
     return ESP_OK;
 }
 
-esp_err_t uart_create_tasks(void) {
-    BaseType_t result;
-
-
-    result = xTaskCreate(uart_input_task, "uart_input", 4096, NULL, 10, NULL);
-    if (result != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create uart_input_task");
-        return ESP_FAIL;
-    }
-
-    result = xTaskCreate(uart_output_task, "uart_output", 8192, NULL, 5, NULL);
-    if (result != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create uart_output_task");
-        return ESP_FAIL;
-    }
-
-    ESP_LOGI(TAG, "UART tasks created successfully");
-    return ESP_OK;
-}
-
 void uart_input_task(void *pvParameters) {
     uart_event_t event;
     uint8_t data[RD_BUF_SIZE];
