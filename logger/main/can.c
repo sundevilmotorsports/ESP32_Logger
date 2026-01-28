@@ -1,9 +1,12 @@
 #include "can.h"
 #include "esp_twai.h"
 #include "esp_twai_onchip.h"
+#include "esp_log.h"
 #include <esp_err.h>
 #include "freertos/FreeRTOS.h"
 #include <string.h>
+
+const char* TAG = "CAN";
 
 #define BITRATE 1000000
 
@@ -70,6 +73,8 @@ void can_receive_task(void *pvParameters) {
 }
 
 void can_init(can_message_callback_t callback_function){
+
+    ESP_LOGI(TAG, "System Init Start\n");
     process = callback_function;
     // Create queue for received messages
     rx_queue = xQueueCreate(64, sizeof(safe_can_frame_t));

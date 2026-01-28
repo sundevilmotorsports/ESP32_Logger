@@ -581,8 +581,8 @@ void sdcard_init(){
     ret = esp_vfs_fat_sdmmc_mount(MOUNT_POINT, &host, &slot_config, &mount_config, &g_card);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to mount SD card using SDMMC (1-bit): %s", esp_err_to_name(ret));
-        vTaskDelay(pdMS_TO_TICKS(5000));
-        esp_restart();
+        // vTaskDelay(pdMS_TO_TICKS(5000));
+        // esp_restart();
         return;
     }
 
