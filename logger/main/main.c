@@ -19,8 +19,10 @@
 #include "uart.h"
 #include "tasks.h"
 
-#define REFRESH_HZ 500
+#define REFRESH_MS 10
+#define RING_CAP 500
 
+log_ring_t log_ring;
 uint8_t logBuffer[CH_COUNT];
 uint8_t usbBuffer[64];
 
@@ -192,7 +194,7 @@ void logBuffer_task(void *pvParamaters){
     TickType_t last_sync_tick = 0;
 
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xPeriod = pdMS_TO_TICKS(1000 / REFRESH_HZ);
+    const TickType_t xPeriod = pdMS_TO_TICKS(REFRESH_MS);
     while(1){
         vTaskDelayUntil(&xLastWakeTime, xPeriod);
 
@@ -282,22 +284,23 @@ void logBuffer_task(void *pvParamaters){
         logBuffer[GPS_FIX] = GNSS_Handle.fixType;
         
 
-        // Write Data to SD Card - mutex handling is internal
-        esp_err_t result = fast_log_buffer(logBuffer, CH_COUNT);
-        if (result != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to write log buffer to SD card");
-        }
+        // // Write Data to SD Card - mutex handling is internal
+        // esp_err_t result = fast_log_buffer(logBuffer, CH_COUNT);
+        // if (result != ESP_OK) {
+        //     ESP_LOGW(TAG, "Failed to write log buffer to SD card");
+        // }
 
+        log_ring_write(&log_ring, logBuffer);
         // Call sdcard_sync() every 1 second to flush buffers to persistent storage
-        if (last_sync_tick == 0) {
-            last_sync_tick = xTaskGetTickCount();
-        } else {
-            TickType_t now = xTaskGetTickCount();
-            if ((now - last_sync_tick) >= pdMS_TO_TICKS(1000)) {
-                sdcard_sync();
-                last_sync_tick = now;
-            }
-        }
+        // if (last_sync_tick == 0) {
+        //     last_sync_tick = xTaskGetTickCount();
+        // } else {
+        //     TickType_t now = xTaskGetTickCount();
+        //     if ((now - last_sync_tick) >= pdMS_TO_TICKS(1000)) {
+        //         sdcard_sync();
+        //         last_sync_tick = now;
+        //     }
+        // }
 
     }
 }
@@ -305,6 +308,8 @@ void logBuffer_task(void *pvParamaters){
 void app_main(void)
 {
     esp_log_level_set("GNSS_DMA", ESP_LOG_DEBUG);
+
+    log_ring_create((size_t)CH_COUNT, (size_t)RING_CAP);
 
     
     // Initialize UART
