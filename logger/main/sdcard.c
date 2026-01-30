@@ -572,7 +572,7 @@ void sdcard_init(){
 
         // Configure mount options - increase resources and optionally format if mount fails
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
-        .format_if_mount_failed = true,   // temporarily allow format to recover corrupted FS
+        .format_if_mount_failed = false,   
         .max_files = 16,                 // increase from 5 to avoid descriptor exhaustion
         .allocation_unit_size = 16 * 1024
     };
@@ -581,8 +581,8 @@ void sdcard_init(){
     ret = esp_vfs_fat_sdmmc_mount(MOUNT_POINT, &host, &slot_config, &mount_config, &g_card);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to mount SD card using SDMMC (1-bit): %s", esp_err_to_name(ret));
-        // vTaskDelay(pdMS_TO_TICKS(5000));
-        // esp_restart();
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        esp_restart();
         return;
     }
 

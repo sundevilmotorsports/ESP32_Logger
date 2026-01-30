@@ -235,11 +235,6 @@ void log_flush_task(void *pvParamaters){
 void logBuffer_task(void *pvParamaters){
     adc_values_t adc_vals;
     
-
-    //TODO: Break out the SD Card Sync into its own task
-    // track last sync time (ticks)
-    TickType_t last_sync_tick = 0;
-
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xPeriod = pdMS_TO_TICKS(REFRESH_MS);
     while(1){
