@@ -22,7 +22,9 @@
 #define REFRESH_MS 10
 #define RING_CAP 500
 
-log_ring_t log_ring;
+log_ring_t *log_ring;
+TaskHandle_t log_flush_task_handle = NULL;
+static uint8_t log_flush_staging[RING_CAP * CH_COUNT];
 uint8_t logBuffer[CH_COUNT];
 uint8_t usbBuffer[64];
 
@@ -185,6 +187,47 @@ static void process_can_message(twai_frame_t *message) {
 
 
 
+void log_flush_task(void *pvParamaters){
+    for (;;) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+        if (log_ring == NULL) {
+            ESP_LOGW(TAG, "Log ring not initialized; flush skipped");
+            continue;
+        }
+
+        size_t entries = 0;
+        uint8_t *dst = log_flush_staging;
+        while (entries < RING_CAP) {
+            if (log_ring_read(log_ring, dst) != 0) {
+                break;
+            }
+            entries++;
+            dst += CH_COUNT;
+        }
+
+        const size_t target_chunk_bytes = 4096; // Match SD file buffer size for better throughput.
+        size_t chunk_entries = target_chunk_bytes / (size_t)CH_COUNT;
+        if (chunk_entries == 0) {
+            chunk_entries = 1;
+        }
+
+        size_t entry_index = 0;
+        while (entry_index < entries) {
+            size_t remaining_entries = entries - entry_index;
+            size_t write_entries = remaining_entries < chunk_entries ? remaining_entries : chunk_entries;
+            size_t write_bytes = write_entries * (size_t)CH_COUNT;
+
+            esp_err_t result = fast_log_buffer(log_flush_staging + (entry_index * (size_t)CH_COUNT), write_bytes);
+            if (result != ESP_OK) {
+                ESP_LOGW(TAG, "Flush write failed at entry %u/%u", (unsigned)(entry_index + 1), (unsigned)entries);
+                break;
+            }
+            entry_index += write_entries;
+        }
+    }
+}
+
 void logBuffer_task(void *pvParamaters){
     adc_values_t adc_vals;
     
@@ -290,7 +333,11 @@ void logBuffer_task(void *pvParamaters){
         //     ESP_LOGW(TAG, "Failed to write log buffer to SD card");
         // }
 
-        log_ring_write(&log_ring, logBuffer);
+        if (log_ring_write(log_ring, logBuffer) != 0) {
+            if (log_flush_task_handle != NULL) {
+                xTaskNotifyGive(log_flush_task_handle);
+            }
+        }
         // Call sdcard_sync() every 1 second to flush buffers to persistent storage
         // if (last_sync_tick == 0) {
         //     last_sync_tick = xTaskGetTickCount();
@@ -309,7 +356,11 @@ void app_main(void)
 {
     esp_log_level_set("GNSS_DMA", ESP_LOG_DEBUG);
 
-    log_ring_create((size_t)CH_COUNT, (size_t)RING_CAP);
+    log_ring = log_ring_create((size_t)CH_COUNT, (size_t)RING_CAP);
+    if (log_ring == NULL) {
+        ESP_LOGE(TAG, "Failed to create log ring buffer");
+        return;
+    }
 
     
     // Initialize UART

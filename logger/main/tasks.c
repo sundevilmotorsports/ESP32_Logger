@@ -16,15 +16,19 @@ static const char *TAG = "TASKS";
 #define TASK_STACK_UART_INPUT 4096
 #define TASK_STACK_UART_OUTPUT 8192
 #define TASK_STACK_LOG_BUFFER 4096
+#define TASK_STACK_LOG_FLUSH 4096
 
 #define TASK_PRIO_CAN_RX 12
 #define TASK_PRIO_LOG_BUFFER 9
+#define TASK_PRIO_LOG_FLUSH 8
 #define TASK_PRIO_GNSS_UART 8
 #define TASK_PRIO_UART_INPUT 7
 #define TASK_PRIO_UART_OUTPUT 6
 #define TASK_PRIO_DTC_CHECK 5
 
 extern void logBuffer_task(void *pvParameters);
+extern void log_flush_task(void *pvParameters);
+extern TaskHandle_t log_flush_task_handle;
 
 esp_err_t tasks_start_all(void) {
     esp_err_t status = ESP_OK;
@@ -33,6 +37,12 @@ esp_err_t tasks_start_all(void) {
     result = xTaskCreate(can_receive_task, "can_rx", TASK_STACK_CAN_RX, NULL, TASK_PRIO_CAN_RX, NULL);
     if (result != pdPASS) {
         ESP_LOGE(TAG, "Failed to create can_receive_task");
+        status = ESP_FAIL;
+    }
+
+    result = xTaskCreate(log_flush_task, "log flush", TASK_STACK_LOG_FLUSH, NULL, TASK_PRIO_LOG_FLUSH, &log_flush_task_handle);
+    if (result != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create log_flush_task");
         status = ESP_FAIL;
     }
 

@@ -64,7 +64,7 @@ sdmmc_card_t* sdcard_get_card_handle(void);
  * @param buffer_len Number of bytes to write
  * @return ESP_OK on success, error code on failure
  */
-esp_err_t fast_log_buffer(const uint8_t *data_buffer, uint8_t buffer_len);
+esp_err_t fast_log_buffer(const uint8_t *data_buffer, size_t buffer_len);
 
 /**
  * @brief Create a new numbered log file

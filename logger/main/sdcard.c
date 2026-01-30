@@ -428,7 +428,7 @@ static esp_err_t open_log_file(const char *filename_in) {
     return ESP_OK;
 }
 
-esp_err_t fast_log_buffer(const uint8_t *data_buffer, uint8_t buffer_len) {
+esp_err_t fast_log_buffer(const uint8_t *data_buffer, size_t buffer_len) {
     if (data_buffer == NULL || buffer_len == 0) {
         return ESP_ERR_INVALID_ARG;
     }

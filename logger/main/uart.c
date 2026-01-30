@@ -25,7 +25,11 @@ static TaskHandle_t dtc_info_task_handle = NULL;
 static bool dtc_info_running = false;
 
 static bool uart_input_mode = false;
-static char input_buffer_char = '\0';
+static QueueHandle_t uart_cmd_queue = NULL;
+static QueueHandle_t uart_input_queue = NULL;
+
+#define UART_CMD_QUEUE_LEN 64
+#define UART_INPUT_QUEUE_LEN 128
 
 // Private function declarations
 static void print_dtc_info(void *pvParameters);
@@ -71,6 +75,19 @@ esp_err_t uart_init(void) {
         return ESP_FAIL;
     }
 
+    uart_cmd_queue = xQueueCreate(UART_CMD_QUEUE_LEN, sizeof(char));
+    if (uart_cmd_queue == NULL) {
+        ESP_LOGE(TAG, "Failed to create UART command queue");
+        return ESP_FAIL;
+    }
+
+    uart_input_queue = xQueueCreate(UART_INPUT_QUEUE_LEN, sizeof(char));
+    if (uart_input_queue == NULL) {
+        ESP_LOGE(TAG, "Failed to create UART input queue");
+        vQueueDelete(uart_cmd_queue);
+        uart_cmd_queue = NULL;
+        return ESP_FAIL;
+    }
 
     
     ESP_LOGI(TAG, "UART initialized successfully");
@@ -90,26 +107,26 @@ void uart_input_task(void *pvParameters) {
                 case UART_DATA: {
                     int len = uart_read_bytes(UART_PORT, data, event.size, portMAX_DELAY);
                     if (len > 0) {
-                        xSemaphoreTake(char_mutex, portMAX_DELAY);
-                        
-                        if (uart_input_mode) {
-                            // In input mode: store each character individually for the input function
-                            for (int i = 0; i < len; i++) {
-                                input_buffer_char = data[i];
-                                // Give the input function time to process this character
-                                xSemaphoreGive(char_mutex);
-                                vTaskDelay(pdMS_TO_TICKS(5)); // Small delay to ensure character is processed
-                                xSemaphoreTake(char_mutex, portMAX_DELAY);
+                        bool input_mode = false;
+                        if (char_mutex != NULL) {
+                            xSemaphoreTake(char_mutex, portMAX_DELAY);
+                            input_mode = uart_input_mode;
+                            if (!input_mode) {
+                                last_char = data[0];
                             }
-                        } else {
-                            // Normal mode: store first character for command processing
-                            last_char = data[0];
+                            xSemaphoreGive(char_mutex);
+                        }
+
+                        QueueHandle_t target_queue = input_mode ? uart_input_queue : uart_cmd_queue;
+                        if (target_queue != NULL) {
+                            for (int i = 0; i < len; i++) {
+                                char ch = (char)data[i];
+                                (void)xQueueSend(target_queue, &ch, 0);
+                            }
                         }
                         
-                        xSemaphoreGive(char_mutex);
-                        
                         // Echo characters back in normal mode (optional)
-                        if (!uart_input_mode) {
+                        if (!input_mode) {
                             // uart_write_bytes(UART_PORT, (const char*)data, 1);
                         }
                     }
@@ -138,14 +155,16 @@ void uart_output_task(void *param) {
     ESP_LOGI(TAG, "Command processor task started");
     
     while (1) {
-        vTaskDelay(pdMS_TO_TICKS(100));  // Check every 100ms
-        
-        // Get the last received character
-        xSemaphoreTake(char_mutex, portMAX_DELAY);
-        char input = last_char;
-        last_char = '\0';  // Clear after consuming
-        xSemaphoreGive(char_mutex);
-        
+        if (uart_cmd_queue == NULL) {
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
+
+        char input = '\0';
+        if (xQueueReceive(uart_cmd_queue, &input, portMAX_DELAY) != pdTRUE) {
+            continue;
+        }
+
         if (input != '\0') {
             ESP_LOGI(TAG, "Processing input: %c", input);
 
@@ -492,43 +511,65 @@ esp_err_t uart_get_user_input(char *buffer, size_t buffer_size, const char *prom
     
     size_t index = 0;
     TickType_t start_time = xTaskGetTickCount();
-    TickType_t timeout_ticks = pdMS_TO_TICKS(timeout_ms);
+    TickType_t timeout_ticks = (timeout_ms > 0) ? pdMS_TO_TICKS(timeout_ms) : 0;
+    const TickType_t wdt_feed_interval = pdMS_TO_TICKS(500);
     
     // Enable input mode for better character handling
     if (char_mutex != NULL) {
         xSemaphoreTake(char_mutex, portMAX_DELAY);
         uart_input_mode = true;
-        input_buffer_char = '\0';  // Clear input buffer
         last_char = '\0';  // Clear last_char to prevent interference
         xSemaphoreGive(char_mutex);
+    }
+
+    if (uart_input_queue != NULL) {
+        char discard = '\0';
+        while (xQueueReceive(uart_input_queue, &discard, 0) == pdTRUE) {
+        }
+    }
+
+    if (uart_cmd_queue != NULL) {
+        char discard = '\0';
+        while (xQueueReceive(uart_cmd_queue, &discard, 0) == pdTRUE) {
+        }
     }
     
     while (1) {
         esp_task_wdt_reset();
-        // Check for timeout
-        if (timeout_ms > 0 && (xTaskGetTickCount() - start_time) > timeout_ticks) {
-            ESP_LOGW(TAG, "User input timeout");
-            // Disable input mode before returning
+        TickType_t wait_ticks = wdt_feed_interval;
+        if (timeout_ms > 0) {
+            TickType_t elapsed = xTaskGetTickCount() - start_time;
+            if (elapsed >= timeout_ticks) {
+                ESP_LOGW(TAG, "User input timeout");
+                if (char_mutex != NULL) {
+                    xSemaphoreTake(char_mutex, portMAX_DELAY);
+                    uart_input_mode = false;
+                    xSemaphoreGive(char_mutex);
+                }
+                if (!was_subscribed) {
+                    esp_task_wdt_delete(NULL);
+                }
+                return ESP_ERR_TIMEOUT;
+            }
+            TickType_t remaining = timeout_ticks - elapsed;
+            wait_ticks = (remaining < wdt_feed_interval) ? remaining : wdt_feed_interval;
+        }
+
+        char ch = '\0';
+        if (uart_input_queue == NULL) {
+            ESP_LOGE(TAG, "UART input queue not initialized");
             if (char_mutex != NULL) {
                 xSemaphoreTake(char_mutex, portMAX_DELAY);
                 uart_input_mode = false;
                 xSemaphoreGive(char_mutex);
             }
-            return ESP_ERR_TIMEOUT;
-        }
-        
-        // Get character from the input buffer
-        char ch = '\0';
-        if (char_mutex != NULL) {
-            xSemaphoreTake(char_mutex, portMAX_DELAY);
-            if (input_buffer_char != '\0') {
-                ch = input_buffer_char;
-                input_buffer_char = '\0';  // Consume the character
+            if (!was_subscribed) {
+                esp_task_wdt_delete(NULL);
             }
-            xSemaphoreGive(char_mutex);
+            return ESP_FAIL;
         }
-        
-        if (ch != '\0') {
+
+        if (xQueueReceive(uart_input_queue, &ch, wait_ticks) == pdTRUE) {
             switch (ch) {
                 case '\r':  // Carriage return
                 case '\n':  // Line feed (Enter key)
@@ -604,9 +645,6 @@ esp_err_t uart_get_user_input(char *buffer, size_t buffer_size, const char *prom
                     break;
             }
         }
-        
-        // Small delay to prevent excessive CPU usage
-        vTaskDelay(pdMS_TO_TICKS(5));  // 5ms delay for responsive input
     }
 }
 
@@ -634,7 +672,17 @@ void uart_deinit(void) {
         vSemaphoreDelete(char_mutex);
         char_mutex = NULL;
     }
-    
+
+    if (uart_cmd_queue != NULL) {
+        vQueueDelete(uart_cmd_queue);
+        uart_cmd_queue = NULL;
+    }
+
+    if (uart_input_queue != NULL) {
+        vQueueDelete(uart_input_queue);
+        uart_input_queue = NULL;
+    }
+
     if (uart_event_queue != NULL) {
         uart_driver_delete(UART_PORT);
         uart_event_queue = NULL;
