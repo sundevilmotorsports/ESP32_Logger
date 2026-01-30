@@ -53,10 +53,14 @@ esp_err_t tasks_start_all(void) {
     }
 
     if (gnss_task_handle == NULL) {
-        result = xTaskCreate(gnss_uart_task, "gnss_uart_task", TASK_STACK_GNSS_UART, NULL, TASK_PRIO_GNSS_UART, &gnss_task_handle);
-        if (result != pdPASS) {
-            ESP_LOGE(TAG, "Failed to create gnss_uart_task");
-            status = ESP_FAIL;
+        if (gnss_is_initialized()) {
+            result = xTaskCreate(gnss_uart_task, "gnss_uart_task", TASK_STACK_GNSS_UART, NULL, TASK_PRIO_GNSS_UART, &gnss_task_handle);
+            if (result != pdPASS) {
+                ESP_LOGE(TAG, "Failed to create gnss_uart_task");
+                status = ESP_FAIL;
+            }
+        } else {
+            ESP_LOGW(TAG, "GNSS not initialized; skipping gnss_uart_task");
         }
     }
 

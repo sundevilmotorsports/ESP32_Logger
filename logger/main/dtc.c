@@ -14,6 +14,7 @@ const char* dtc_device_names[] = {
 
 static const char *TAG = "DTC_MODULE";
 can_dtc *dtc_devices[DTC_COUNT];
+static can_dtc dtc_fallbacks[DTC_COUNT];
 
 // Task that runs DTC error checking at 50Hz
 void dtc_task(void *pvParameters) {
@@ -49,6 +50,11 @@ void dtc_task(void *pvParameters) {
  * @note Memory allocation failure will set errState to 0 and log an error
  */
 void DTC_CAN_Init_Device(can_dtc *dtc, uint8_t index, uint8_t measures, uint16_t threshold, uint64_t start_time){
+    if (dtc == NULL) {
+        ESP_LOGE(TAG, "DTC init called with NULL pointer (index %u)", index);
+        return;
+    }
+
     dtc->errState = 1; // Clear error state
     dtc->DTC_Idx = index; // Set DTC index
     dtc->measures = measures; // Set goal number of measurements
@@ -56,12 +62,24 @@ void DTC_CAN_Init_Device(can_dtc *dtc, uint8_t index, uint8_t measures, uint16_t
     dtc->totalTime = start_time; // Reset total time
     dtc->prevTime = start_time; // Set previous time to start time
     dtc->threshold = threshold; // Set threshold for error state
+    if (measures == 0) {
+        dtc->errState = 0;
+        dtc->timeBuffer = NULL;
+        ESP_LOGE(TAG, "Invalid DTC measure count (index %u)", index);
+        return;
+    }
+
     dtc->timeBuffer = (uint64_t *)malloc(measures * sizeof(uint64_t)); // Allocate memory for time buffer
 
     if (dtc->timeBuffer == NULL) {
         // Handle memory allocation failure
         dtc->errState = 0; // Set error state
         ESP_LOGE(TAG, "Failed to allocate memory for DTC time buffer -> Index: %d", index);
+        dtc->measures = 0;
+        dtc->bufferIndex = 0;
+        dtc->totalTime = start_time;
+        dtc->prevTime = start_time;
+        return;
     }
     for (int i = 0; i < measures; i++) {
         dtc->timeBuffer[i] = start_time;
@@ -130,14 +148,14 @@ void DTC_CAN_Update_Error_State(can_dtc *dtc, uint64_t current_time) {
     return;
 }
 
-void DTC_Init(uint64_t start_time){
+void DTC_Init(){
     for(int i = 0; i < DTC_COUNT; i++) {
         dtc_devices[i] = (can_dtc *)malloc(sizeof(can_dtc));
         if (dtc_devices[i] == NULL) {
             ESP_LOGE(TAG, "Failed to allocate memory for DTC device %d", i);
-            continue;
+            dtc_devices[i] = &dtc_fallbacks[i];
         }
-        DTC_CAN_Init_Device(dtc_devices[i], i, DTC_MEASURES, DTC_THRESHOLD_MS, start_time);
+        DTC_CAN_Init_Device(dtc_devices[i], i, DTC_MEASURES, DTC_THRESHOLD_MS, 0);
     }
 
 }

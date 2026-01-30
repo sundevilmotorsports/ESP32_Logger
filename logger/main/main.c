@@ -61,8 +61,12 @@ imu_gyro_t  imu_gyro;
 
 static void process_can_message(twai_frame_t *message) {
 
-    uint8_t data[8];
-    memcpy(data, message->buffer, message->header.dlc);
+    uint8_t data[8] = {0};
+    size_t copy_len = message->header.dlc;
+    if (copy_len > sizeof(data)) {
+        copy_len = sizeof(data);
+    }
+    memcpy(data, message->buffer, copy_len);
     switch(message->header.id) {
         case 0x35F:
             drs = data[0];
@@ -82,7 +86,7 @@ static void process_can_message(twai_frame_t *message) {
             flw.ambTemp = data[4] << 8 | data[5];
 
             //DTC Response Update
-            DTC_CAN_Response_Measurement(dtc_devices[flWheelBoard_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            DTC_CAN_Response_Measurement(dtc_devices[flWheelBoard_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
             break;
             
         case 0x364:
@@ -92,7 +96,7 @@ static void process_can_message(twai_frame_t *message) {
             frw.ambTemp = data[4] << 8 | data[5];
 
             //DTC Response Update
-            DTC_CAN_Response_Measurement(dtc_devices[frWheelBoard_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            DTC_CAN_Response_Measurement(dtc_devices[frWheelBoard_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
             break;
             
         case 0x365:
@@ -102,7 +106,7 @@ static void process_can_message(twai_frame_t *message) {
             rrw.ambTemp = data[4] << 8 | data[5];
 
             //DTC Response Update
-            DTC_CAN_Response_Measurement(dtc_devices[rrWheelBoard_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            DTC_CAN_Response_Measurement(dtc_devices[rrWheelBoard_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
             break;
             
         case 0x366:
@@ -112,7 +116,7 @@ static void process_can_message(twai_frame_t *message) {
             rlw.ambTemp = data[4] << 8 | data[5];
 
             //DTC Response Update
-            DTC_CAN_Response_Measurement(dtc_devices[rlWheelBoard_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            DTC_CAN_Response_Measurement(dtc_devices[rlWheelBoard_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
             break;
             
         case 0x4e2:
@@ -120,7 +124,7 @@ static void process_can_message(twai_frame_t *message) {
             flsg = data[0] << 8 | data[1];
 
             //String Gauge DTC Check
-            DTC_CAN_Response_Measurement(dtc_devices[flStrainGauge_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            DTC_CAN_Response_Measurement(dtc_devices[flStrainGauge_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
 
             break;
             
@@ -129,7 +133,7 @@ static void process_can_message(twai_frame_t *message) {
             frsg = data[0] << 8 | data[1];
 
             //String Gauge DTC Check
-            DTC_CAN_Response_Measurement(dtc_devices[frStrainGauge_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            DTC_CAN_Response_Measurement(dtc_devices[frStrainGauge_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
             break;
             
         case 0x4e4:
@@ -137,7 +141,7 @@ static void process_can_message(twai_frame_t *message) {
             rrsg = data[0] << 8 | data[1];
 
             //String Gauge DTC Check
-            DTC_CAN_Response_Measurement(dtc_devices[rrStrainGauge_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            DTC_CAN_Response_Measurement(dtc_devices[rrStrainGauge_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
             break;
             
         case 0x4e5:
@@ -145,7 +149,7 @@ static void process_can_message(twai_frame_t *message) {
             rlsg = data[0] << 8 | data[1];
 
             //String Gauge DTC Check
-            DTC_CAN_Response_Measurement(dtc_devices[rlStrainGauge_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            DTC_CAN_Response_Measurement(dtc_devices[rlStrainGauge_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
             break;
             
         case 0x3e8:
@@ -313,7 +317,7 @@ void logBuffer_task(void *pvParamaters){
         logBuffer[DTC_RLW]  = dtc_devices[rlWheelBoard_DTC]->errState;
         logBuffer[DTC_FLSG] = dtc_devices[flStrainGauge_DTC]->errState;
         logBuffer[DTC_FRSG] = dtc_devices[frStrainGauge_DTC]->errState;
-        logBuffer[DTC_RLSG] = dtc_devices[flStrainGauge_DTC]->errState;
+        logBuffer[DTC_RLSG] = dtc_devices[rlStrainGauge_DTC]->errState;
         logBuffer[DTC_RRSG] = dtc_devices[rrStrainGauge_DTC]->errState;
         logBuffer[DTC_IMU]  = dtc_devices[imu_DTC]->errState;
         logBuffer[GPS_0_]   = dtc_devices[gps_0_DTC]->errState;
@@ -367,7 +371,7 @@ void app_main(void)
     sdcard_init();
     gnss_init();
     ESP_ERROR_CHECK(uart_init());
-    DTC_Init(pdTICKS_TO_MS(xTaskGetTickCount()));
+    DTC_Init();
     i2c_master_init();
     adc_init();
     can_init(process_can_message);

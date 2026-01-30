@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <stdbool.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -47,3 +48,4 @@ extern TaskHandle_t gnss_task_handle;
 void gnss_init(void);
 void gnss_uart_task(void *pvParameters);
 void gnss_stop(void);
+bool gnss_is_initialized(void);
