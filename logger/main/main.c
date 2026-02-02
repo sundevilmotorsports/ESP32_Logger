@@ -67,17 +67,20 @@ static void process_can_message(twai_frame_t *message) {
         copy_len = sizeof(data);
     }
     memcpy(data, message->buffer, copy_len);
+
+
     switch(message->header.id) {
         case 0x35F:
             drs = data[0];
             break;
         //IMU Data Handling
         case 0x360:
-        memcpy(&imu_gyro, data, 6);
-        break;
+            memcpy(&imu_gyro, data, 6);
+            break;
         case 0x361:
-        memcpy(&imu_accel, data, 6);
-        break;
+            memcpy(&imu_accel, data, 6);
+            DTC_CAN_Response_Measurement(dtc_devices[imu_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
+            break;
             
         case 0x363:
             //Front Left Wheel Board
@@ -185,6 +188,10 @@ static void process_can_message(twai_frame_t *message) {
                 TXDAT[2] = shift2;
             }
             DTC_CAN_Response_Measurement(dtc_devices[shifter_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            break;
+
+        default:
+            ESP_LOGI(TAG, "CAN Rx\tID: %x\r\n", message->header.id);
             break;
     }
 }
@@ -354,6 +361,8 @@ void logBuffer_task(void *pvParamaters){
 void app_main(void)
 {
     esp_log_level_set("GNSS_DMA", ESP_LOG_DEBUG);
+
+    
 
     log_ring = log_ring_create((size_t)CH_COUNT, (size_t)RING_CAP);
     if (log_ring == NULL) {

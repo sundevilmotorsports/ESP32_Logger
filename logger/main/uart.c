@@ -375,6 +375,16 @@ void uart_output_task(void *param) {
                     printf("RRW -> RPM: %u\tAMB: %.2f\tOBJ: %.2f\n", rrw_rpm, rrw_amb, rrw_obj);
                     printf("RLW -> RPM: %u\tAMB: %.2f\tOBJ: %.2f\n", rlw_rpm, rlw_amb, rlw_obj);
                     break;
+                case 'X':
+                case 'x':
+                    uint16_t flsg = logBuffer[FL_SG1] << 8 | logBuffer[FL_SG];
+                    uint16_t frsg = logBuffer[FR_SG1] << 8 | logBuffer[FR_SG];
+                    uint16_t rlsg = logBuffer[RL_SG1] << 8 | logBuffer[RL_SG];
+                    uint16_t rrsg = logBuffer[RR_SG1] << 8 | logBuffer[RR_SG];
+                    printf(" FRSG: %u\tFLSG: %u\tRRSG: %u\tRLSG: %u\r\n", frsg, flsg, rrsg, rlsg);
+                    break;
+
+                    
                 case 27: // ESC key
                     printf("\033[2J\033[H"); // Clear screen and move cursor to top
                     printf("Screen cleared!\n");
