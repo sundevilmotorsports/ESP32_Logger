@@ -236,6 +236,7 @@ void log_flush_task(void *pvParamaters){
             }
             entry_index += write_entries;
         }
+        sdcard_sync();
     }
 }
 

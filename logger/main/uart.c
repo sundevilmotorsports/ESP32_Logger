@@ -166,7 +166,7 @@ void uart_output_task(void *param) {
         }
 
         if (input != '\0') {
-            ESP_LOGI(TAG, "Processing input: %c", input);
+            // ESP_LOGI(TAG, "Processing input: %c", input);
 
             // Stop DTC info task if it's running and a new command is issued (except 'd'/'D')
             if (dtc_info_running && (input != 'd' && input != 'D')) {
