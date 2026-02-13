@@ -17,9 +17,14 @@
 #include "sdcard.h"
 #include "log_chnl.h"
 #include "uart.h"
+#include "tasks.h"
 
-#define REFRESH_HZ 500
+#define REFRESH_MS 10
+#define RING_CAP 500
 
+log_ring_t *log_ring;
+TaskHandle_t log_flush_task_handle = NULL;
+static uint8_t log_flush_staging[RING_CAP * CH_COUNT];
 uint8_t logBuffer[CH_COUNT];
 uint8_t usbBuffer[64];
 
@@ -37,10 +42,16 @@ typedef struct {
 } wheel_data_s_t;
 
 //Logging variables
+//CAN Tx buffer - unimplemented
 uint8_t				  TXDAT[8];
 uint32_t count = 0;
+
+// # of times IMU send us a message - debug
 uint32_t imuCount = 0;
+
+// Strain Gauge Storage - raw data
 uint16_t frsg = 0, flsg = 0, rrsg = 0, rlsg = 0;
+
 wheel_data_s_t frw, flw, rlw, rrw;
 uint8_t testNo = 0;
 uint8_t canFifoFull = 0;
@@ -56,19 +67,26 @@ imu_gyro_t  imu_gyro;
 
 static void process_can_message(twai_frame_t *message) {
 
-    uint8_t data[8];
-    memcpy(data, message->buffer, message->header.dlc);
+    uint8_t data[8] = {0};
+    size_t copy_len = message->header.dlc;
+    if (copy_len > sizeof(data)) {
+        copy_len = sizeof(data);
+    }
+    memcpy(data, message->buffer, copy_len);
+
+
     switch(message->header.id) {
         case 0x35F:
             drs = data[0];
             break;
         //IMU Data Handling
         case 0x360:
-        memcpy(&imu_gyro, data, 6);
-        break;
+            memcpy(&imu_gyro, data, 6);
+            break;
         case 0x361:
-        memcpy(&imu_accel, data, 6);
-        break;
+            memcpy(&imu_accel, data, 6);
+            DTC_CAN_Response_Measurement(dtc_devices[imu_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
+            break;
             
         case 0x363:
             //Front Left Wheel Board
@@ -77,7 +95,7 @@ static void process_can_message(twai_frame_t *message) {
             flw.ambTemp = data[4] << 8 | data[5];
 
             //DTC Response Update
-            DTC_CAN_Response_Measurement(dtc_devices[flWheelBoard_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            DTC_CAN_Response_Measurement(dtc_devices[flWheelBoard_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
             break;
             
         case 0x364:
@@ -87,7 +105,7 @@ static void process_can_message(twai_frame_t *message) {
             frw.ambTemp = data[4] << 8 | data[5];
 
             //DTC Response Update
-            DTC_CAN_Response_Measurement(dtc_devices[frWheelBoard_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            DTC_CAN_Response_Measurement(dtc_devices[frWheelBoard_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
             break;
             
         case 0x365:
@@ -97,7 +115,7 @@ static void process_can_message(twai_frame_t *message) {
             rrw.ambTemp = data[4] << 8 | data[5];
 
             //DTC Response Update
-            DTC_CAN_Response_Measurement(dtc_devices[rrWheelBoard_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            DTC_CAN_Response_Measurement(dtc_devices[rrWheelBoard_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
             break;
             
         case 0x366:
@@ -107,7 +125,7 @@ static void process_can_message(twai_frame_t *message) {
             rlw.ambTemp = data[4] << 8 | data[5];
 
             //DTC Response Update
-            DTC_CAN_Response_Measurement(dtc_devices[rlWheelBoard_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            DTC_CAN_Response_Measurement(dtc_devices[rlWheelBoard_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
             break;
             
         case 0x4e2:
@@ -115,7 +133,7 @@ static void process_can_message(twai_frame_t *message) {
             flsg = data[0] << 8 | data[1];
 
             //String Gauge DTC Check
-            DTC_CAN_Response_Measurement(dtc_devices[flStrainGauge_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            DTC_CAN_Response_Measurement(dtc_devices[flStrainGauge_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
 
             break;
             
@@ -124,7 +142,7 @@ static void process_can_message(twai_frame_t *message) {
             frsg = data[0] << 8 | data[1];
 
             //String Gauge DTC Check
-            DTC_CAN_Response_Measurement(dtc_devices[frStrainGauge_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            DTC_CAN_Response_Measurement(dtc_devices[frStrainGauge_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
             break;
             
         case 0x4e4:
@@ -132,7 +150,7 @@ static void process_can_message(twai_frame_t *message) {
             rrsg = data[0] << 8 | data[1];
 
             //String Gauge DTC Check
-            DTC_CAN_Response_Measurement(dtc_devices[rrStrainGauge_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            DTC_CAN_Response_Measurement(dtc_devices[rrStrainGauge_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
             break;
             
         case 0x4e5:
@@ -140,7 +158,7 @@ static void process_can_message(twai_frame_t *message) {
             rlsg = data[0] << 8 | data[1];
 
             //String Gauge DTC Check
-            DTC_CAN_Response_Measurement(dtc_devices[rlStrainGauge_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+            DTC_CAN_Response_Measurement(dtc_devices[rlStrainGauge_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
             break;
             
         case 0x3e8:
@@ -177,23 +195,64 @@ static void process_can_message(twai_frame_t *message) {
             }
             DTC_CAN_Response_Measurement(dtc_devices[shifter_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
             break;
+
+        default:
+            ESP_LOGI(TAG, "CAN Rx\tID: %x\r\n", message->header.id);
+            break;
     }
 }
 
 
 
+void log_flush_task(void *pvParamaters){
+    for (;;) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+        if (log_ring == NULL) {
+            ESP_LOGW(TAG, "Log ring not initialized; flush skipped");
+            continue;
+        }
+
+        size_t entries = 0;
+        uint8_t *dst = log_flush_staging;
+        while (entries < RING_CAP) {
+            if (log_ring_read(log_ring, dst) != 0) {
+                break;
+            }
+            entries++;
+            dst += CH_COUNT;
+        }
+
+        const size_t target_chunk_bytes = 4096; // Match SD file buffer size for better throughput.
+        size_t chunk_entries = target_chunk_bytes / (size_t)CH_COUNT;
+        if (chunk_entries == 0) {
+            chunk_entries = 1;
+        }
+
+        size_t entry_index = 0;
+        while (entry_index < entries) {
+            size_t remaining_entries = entries - entry_index;
+            size_t write_entries = remaining_entries < chunk_entries ? remaining_entries : chunk_entries;
+            size_t write_bytes = write_entries * (size_t)CH_COUNT;
+
+            esp_err_t result = fast_log_buffer(log_flush_staging + (entry_index * (size_t)CH_COUNT), write_bytes);
+            if (result != ESP_OK) {
+                ESP_LOGW(TAG, "Flush write failed at entry %u/%u", (unsigned)(entry_index + 1), (unsigned)entries);
+                break;
+            }
+            entry_index += write_entries;
+        }
+        sdcard_sync();
+    }
+}
+
 void logBuffer_task(void *pvParamaters){
     adc_values_t adc_vals;
     
-
-    //TODO: Break out the SD Card Sync into its own task
-    // track last sync time (ticks)
-    TickType_t last_sync_tick = 0;
-
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xPeriod = pdMS_TO_TICKS(1000 / REFRESH_HZ);
+    const TickType_t xPeriod = pdMS_TO_TICKS(REFRESH_MS);
     while(1){
-        // vTaskDelayUntil(&xLastWakeTime, xPeriod);
+        vTaskDelayUntil(&xLastWakeTime, xPeriod);
 
         // //Log Analog Sensor Data
         // Get ADC values quickly (no SPI operations here)
@@ -267,7 +326,7 @@ void logBuffer_task(void *pvParamaters){
         logBuffer[DTC_RLW]  = dtc_devices[rlWheelBoard_DTC]->errState;
         logBuffer[DTC_FLSG] = dtc_devices[flStrainGauge_DTC]->errState;
         logBuffer[DTC_FRSG] = dtc_devices[frStrainGauge_DTC]->errState;
-        logBuffer[DTC_RLSG] = dtc_devices[flStrainGauge_DTC]->errState;
+        logBuffer[DTC_RLSG] = dtc_devices[rlStrainGauge_DTC]->errState;
         logBuffer[DTC_RRSG] = dtc_devices[rrStrainGauge_DTC]->errState;
         logBuffer[DTC_IMU]  = dtc_devices[imu_DTC]->errState;
         logBuffer[GPS_0_]   = dtc_devices[gps_0_DTC]->errState;
@@ -281,22 +340,27 @@ void logBuffer_task(void *pvParamaters){
         logBuffer[GPS_FIX] = GNSS_Handle.fixType;
         
 
-        // Write Data to SD Card - mutex handling is internal
-        esp_err_t result = fast_log_buffer(logBuffer, CH_COUNT);
-        if (result != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to write log buffer to SD card");
-        }
+        // // Write Data to SD Card - mutex handling is internal
+        // esp_err_t result = fast_log_buffer(logBuffer, CH_COUNT);
+        // if (result != ESP_OK) {
+        //     ESP_LOGW(TAG, "Failed to write log buffer to SD card");
+        // }
 
-        // Call sdcard_sync() every 1 second to flush buffers to persistent storage
-        if (last_sync_tick == 0) {
-            last_sync_tick = xTaskGetTickCount();
-        } else {
-            TickType_t now = xTaskGetTickCount();
-            if ((now - last_sync_tick) >= pdMS_TO_TICKS(1000)) {
-                sdcard_sync();
-                last_sync_tick = now;
+        if (log_ring_write(log_ring, logBuffer) != 0) {
+            if (log_flush_task_handle != NULL) {
+                xTaskNotifyGive(log_flush_task_handle);
             }
         }
+        // Call sdcard_sync() every 1 second to flush buffers to persistent storage
+        // if (last_sync_tick == 0) {
+        //     last_sync_tick = xTaskGetTickCount();
+        // } else {
+        //     TickType_t now = xTaskGetTickCount();
+        //     if ((now - last_sync_tick) >= pdMS_TO_TICKS(1000)) {
+        //         sdcard_sync();
+        //         last_sync_tick = now;
+        //     }
+        // }
 
     }
 }
@@ -306,34 +370,27 @@ void app_main(void)
     esp_log_level_set("GNSS_DMA", ESP_LOG_DEBUG);
 
     
+
+    log_ring = log_ring_create((size_t)CH_COUNT, (size_t)RING_CAP);
+    if (log_ring == NULL) {
+        ESP_LOGE(TAG, "Failed to create log ring buffer");
+        return;
+    }
+
+    
     // Initialize UART
     sdcard_init();
     gnss_init();
     ESP_ERROR_CHECK(uart_init());
-    DTC_Init(pdTICKS_TO_MS(xTaskGetTickCount()));
+    DTC_Init();
     i2c_master_init();
     adc_init();
     can_init(process_can_message);
 
-    
-
-    ESP_ERROR_CHECK(uart_create_tasks());
-
-    if (dtc_start_task() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to create dtc_task");
+    if (tasks_start_all() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start RTOS tasks");
         return;
     }
-
-
-    gnss_start_task();
-
-        // Create ADC reading task (high priority for consistent sampling)
-    BaseType_t result = xTaskCreate(logBuffer_task, "log buffer", 4096, NULL, 8, NULL);
-    if (result != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create Logging task");
-    }
-
-    ESP_LOGI(TAG, "All tasks created successfully");
     
     // Show welcome message and help
     vTaskDelay(pdMS_TO_TICKS(500)); // Wait for tasks to start
@@ -343,4 +400,3 @@ void app_main(void)
         // ESP_LOGI(TAG, "System heartbeat - Free heap: %ld bytes", esp_get_free_heap_size());
     }
 }
-

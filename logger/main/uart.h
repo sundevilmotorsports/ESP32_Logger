@@ -26,7 +26,6 @@ extern QueueHandle_t uart_event_queue;
 esp_err_t uart_init(void);
 void uart_input_task(void *pvParameters);
 void uart_output_task(void *param);
-esp_err_t uart_create_tasks(void);
 esp_err_t uart_get_user_input(char *buffer, size_t buffer_size, const char *prompt, uint32_t timeout_ms, bool echo);
 void uart_deinit(void);
 

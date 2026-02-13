@@ -428,7 +428,7 @@ static esp_err_t open_log_file(const char *filename_in) {
     return ESP_OK;
 }
 
-esp_err_t fast_log_buffer(const uint8_t *data_buffer, uint8_t buffer_len) {
+esp_err_t fast_log_buffer(const uint8_t *data_buffer, size_t buffer_len) {
     if (data_buffer == NULL || buffer_len == 0) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -572,7 +572,7 @@ void sdcard_init(){
 
         // Configure mount options - increase resources and optionally format if mount fails
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
-        .format_if_mount_failed = true,   // temporarily allow format to recover corrupted FS
+        .format_if_mount_failed = false,   
         .max_files = 16,                 // increase from 5 to avoid descriptor exhaustion
         .allocation_unit_size = 16 * 1024
     };

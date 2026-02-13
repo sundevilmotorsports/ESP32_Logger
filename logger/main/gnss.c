@@ -14,12 +14,15 @@
 
 static const char *TAG = "GNSS_DMA";
 static QueueHandle_t neo_uart_event_queue = NULL;
-static TaskHandle_t gnss_task_handle = NULL;
+TaskHandle_t gnss_task_handle = NULL;
 static uint8_t *dma_buffer = NULL;
+static bool gnss_ready = false;
 
 GNSS_StateHandle GNSS_Handle = {0};
 
 void gnss_init(void) {
+    gnss_ready = false;
+
     const uart_config_t uart_config = {
         .baud_rate = 38400,
         .data_bits = UART_DATA_8_BITS,
@@ -31,8 +34,19 @@ void gnss_init(void) {
 
     ESP_LOGI(TAG, "Installing UART driver...");
     // Install UART driver with DMA support
-    ESP_ERROR_CHECK(uart_driver_install(NEO_UART_PORT, GNSS_DMA_BUF_SIZE, 0, 20, &neo_uart_event_queue, 0));
-    ESP_ERROR_CHECK(uart_param_config(NEO_UART_PORT, &uart_config));
+    esp_err_t ret = uart_driver_install(NEO_UART_PORT, GNSS_DMA_BUF_SIZE, 0, 20, &neo_uart_event_queue, 0);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "UART driver install failed: %s", esp_err_to_name(ret));
+        neo_uart_event_queue = NULL;
+        return;
+    }
+    ret = uart_param_config(NEO_UART_PORT, &uart_config);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "UART param config failed: %s", esp_err_to_name(ret));
+        uart_driver_delete(NEO_UART_PORT);
+        neo_uart_event_queue = NULL;
+        return;
+    }
 
     esp_err_t pin_result = uart_set_pin(NEO_UART_PORT, NEO_TX_PIN, NEO_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     if (pin_result != ESP_OK) {
@@ -43,14 +57,23 @@ void gnss_init(void) {
     ESP_LOGI(TAG, "UART configured successfully at 38400 baud");
 
     // Enable pattern detection for NMEA sentence end ('\n')
-    ESP_ERROR_CHECK(uart_enable_pattern_det_baud_intr(NEO_UART_PORT, GNSS_PATTERN_CHR, 1, 9, 0, 0));
+    ret = uart_enable_pattern_det_baud_intr(NEO_UART_PORT, GNSS_PATTERN_CHR, 1, 9, 0, 0);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "UART pattern detection enable failed: %s", esp_err_to_name(ret));
+        uart_driver_delete(NEO_UART_PORT);
+        neo_uart_event_queue = NULL;
+        return;
+    }
 
     dma_buffer = (uint8_t*)heap_caps_malloc(GNSS_DMA_BUF_SIZE, MALLOC_CAP_DMA);
     if (!dma_buffer) {
         ESP_LOGE(TAG, "Failed to allocate DMA buffer");
+        uart_driver_delete(NEO_UART_PORT);
+        neo_uart_event_queue = NULL;
         return;
     }
 
+    gnss_ready = true;
     ESP_LOGI(TAG, "GPS UART initialization complete");
 }
 
@@ -196,11 +219,17 @@ static void process_nmea_sentence(const char* sentence, size_t len) {
     }
 }
 
-static void neo_uart_task(void *pvParameters) {
+void gnss_uart_task(void *pvParameters) {
     uart_event_t event;
     size_t buffered_size;
 
     ESP_LOGI(TAG, "NEO-F9P DMA UART task started");
+
+    if (!gnss_ready || neo_uart_event_queue == NULL || dma_buffer == NULL) {
+        ESP_LOGE(TAG, "GNSS not initialized; stopping UART task");
+        vTaskDelete(NULL);
+        return;
+    }
 
     while (1) {
         if (xQueueReceive(neo_uart_event_queue, &event, portMAX_DELAY)) {
@@ -278,13 +307,9 @@ static void neo_uart_task(void *pvParameters) {
     }
 }
 
-void gnss_start_task(void) {
-    if (gnss_task_handle == NULL) {
-        xTaskCreate(neo_uart_task, "gnss_uart_task", 4096, NULL, 10, &gnss_task_handle);
-    }
-}
-
 void gnss_stop(void) {
+    gnss_ready = false;
+
     if (gnss_task_handle != NULL) {
         vTaskDelete(gnss_task_handle);
         gnss_task_handle = NULL;
@@ -299,4 +324,8 @@ void gnss_stop(void) {
         free(dma_buffer);
         dma_buffer = NULL;
     }
+}
+
+bool gnss_is_initialized(void) {
+    return gnss_ready;
 }

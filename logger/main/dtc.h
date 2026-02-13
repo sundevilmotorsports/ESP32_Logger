@@ -72,11 +72,10 @@ extern can_dtc *dtc_devices[DTC_COUNT];
 void DTC_CAN_Init_Device(can_dtc *dtc, uint8_t index, uint8_t measures, uint16_t threshold, uint64_t start_time);
 void DTC_CAN_Update_Error_State(can_dtc *dtc, uint64_t current_time);
 void DTC_CAN_Response_Measurement(can_dtc *dtc, uint64_t response_time);
-void DTC_Init(uint64_t start_time);
+void DTC_Init();
 void DTC_Error_Check(uint64_t current_time);
 
 void dtc_task(void *pvParameters);
-esp_err_t dtc_start_task(void);
 
 
 #endif

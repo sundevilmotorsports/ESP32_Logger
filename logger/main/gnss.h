@@ -1,5 +1,8 @@
 #pragma once
 #include <stdint.h>
+#include <stdbool.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 // DMA buffer configuration
 #define GNSS_DMA_BUF_SIZE 2048
@@ -39,8 +42,10 @@ typedef struct
 }GNSS_StateHandle;
 
 extern GNSS_StateHandle GNSS_Handle;
+extern TaskHandle_t gnss_task_handle;
 
 // Function declarations
 void gnss_init(void);
-void gnss_start_task(void);
+void gnss_uart_task(void *pvParameters);
 void gnss_stop(void);
+bool gnss_is_initialized(void);
