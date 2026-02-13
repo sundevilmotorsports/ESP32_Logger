@@ -100,4 +100,11 @@ void can_init(can_message_callback_t callback_function){
     ESP_ERROR_CHECK(twai_new_node_onchip(&can_config, &hfdcan));
     ESP_ERROR_CHECK(twai_node_register_event_callbacks(hfdcan, &callbacks, NULL));
     ESP_ERROR_CHECK(twai_node_enable(hfdcan));
+
+    BaseType_t result = xTaskCreate(can_receive_task, "can_rx", 4096, NULL, 15, NULL);
+    if (result != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create can_receive_task");
+        return;
+    }
+
 }
