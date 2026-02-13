@@ -42,10 +42,16 @@ typedef struct {
 } wheel_data_s_t;
 
 //Logging variables
+//CAN Tx buffer - unimplemented
 uint8_t				  TXDAT[8];
 uint32_t count = 0;
+
+// # of times IMU send us a message - debug
 uint32_t imuCount = 0;
+
+// Strain Gauge Storage - raw data
 uint16_t frsg = 0, flsg = 0, rrsg = 0, rlsg = 0;
+
 wheel_data_s_t frw, flw, rlw, rrw;
 uint8_t testNo = 0;
 uint8_t canFifoFull = 0;
