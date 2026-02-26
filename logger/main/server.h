@@ -10,7 +10,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
-#include "remote_access.h"
 
 // server handlers
 static esp_err_t status_get_handler(httpd_req_t *req);

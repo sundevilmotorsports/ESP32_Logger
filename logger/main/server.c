@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
-#include "remote_access.h"
 
 static const char *TAG = "HTTP_SERVER";
 static httpd_handle_t server = NULL;
