@@ -11,11 +11,6 @@
 #include <string.h>
 #include <sys/stat.h>
 
-// server handlers
-static esp_err_t status_get_handler(httpd_req_t *req);
-static esp_err_t file_view_handler(httpd_req_t *req);
-static esp_err_t file_download_handler(httpd_req_t *req);
-
 // server start
 esp_err_t http_server_start(void);
 
