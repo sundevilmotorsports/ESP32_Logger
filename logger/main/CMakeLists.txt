@@ -8,4 +8,6 @@ idf_component_register(SRCS     "gnss.c"
                                 "sdcard.c"
                                 "uart.c"
                                 "tasks.c"
+                                "server.c"
+                                "wifi.c"
                     INCLUDE_DIRS ".")

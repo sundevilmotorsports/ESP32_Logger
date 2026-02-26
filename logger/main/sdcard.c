@@ -112,6 +112,8 @@ static esp_err_t validate_filename(const char *filename) {
 
 
 //NVS Functions
+
+// sets up flash memory in esp32
 void nvs_init(){
     esp_err_t ret;
 
@@ -132,6 +134,7 @@ void nvs_init(){
     }
 }
 
+// retreives filename being used to save logger data
 esp_err_t nvs_get_log_name(char *buffer, size_t buffer_size) {
     if (buffer == NULL || buffer_size == 0) {
         ESP_LOGE(TAG, "Invalid buffer or buffer size");
@@ -176,6 +179,7 @@ esp_err_t nvs_get_log_name(char *buffer, size_t buffer_size) {
     return ESP_OK;
 }
 
+// updates filename
 esp_err_t nvs_set_log_name(const char *log_name) {
     if (log_name == NULL) {
         ESP_LOGE(TAG, "log_name parameter is NULL");
@@ -220,6 +224,7 @@ esp_err_t nvs_set_log_name(const char *log_name) {
     return ESP_OK;
 }
 
+// gets test run number
 esp_err_t nvs_get_testno(uint8_t *testno) {
     if (testno == NULL) {
         ESP_LOGE(TAG, "testno pointer is NULL");
@@ -241,6 +246,7 @@ esp_err_t nvs_get_testno(uint8_t *testno) {
     return err;
 }
 
+// increments test run
 esp_err_t nvs_increment_testno(uint8_t *testno){
     if(hnvs == 0){
         ESP_LOGE(TAG, "NVS handle not initialized");
@@ -272,6 +278,7 @@ esp_err_t nvs_increment_testno(uint8_t *testno){
     return err;
 }
 
+// sets test num manually
 esp_err_t nvs_set_testno(uint8_t testno){
     if(hnvs == 0){
         ESP_LOGE(TAG, "NVS handle not initialized");
@@ -297,6 +304,7 @@ esp_err_t nvs_set_testno(uint8_t testno){
 //File Operations
 // Open a new log file
 static esp_err_t open_log_file(const char *filename_in) {
+    // grabs mutex - prevents any other action from grabbing
     xSemaphoreTake(log_file_mutex, portMAX_DELAY);
 
     // Sanitize input filename: remove trailing CR/LF and control chars

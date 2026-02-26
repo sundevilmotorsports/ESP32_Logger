@@ -19,6 +19,10 @@
 #include "uart.h"
 #include "tasks.h"
 
+// reader files
+#include "server.h"
+#include "wifi.h"
+
 #define REFRESH_MS 10
 #define RING_CAP 500
 
@@ -202,8 +206,6 @@ static void process_can_message(twai_frame_t *message) {
     }
 }
 
-
-
 void log_flush_task(void *pvParamaters){
     for (;;) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
@@ -365,6 +367,7 @@ void logBuffer_task(void *pvParamaters){
     }
 }
 
+
 void app_main(void)
 {
     esp_log_level_set("GNSS_DMA", ESP_LOG_DEBUG);
@@ -386,6 +389,18 @@ void app_main(void)
     i2c_master_init();
     adc_init();
     can_init(process_can_message);
+
+    // start wifi
+    wifi_init();
+
+    // start http server
+    if(http_server_start() == ESP_OK) {
+        ESP_LOGI(TAG, "Server started");
+        ESP_LOGI(TAG, "Connect to Wi-Fi 'data-logger' and visit: http://192.168.4.1/api/view");
+    }
+    else {
+        ESP_LOGI(TAG, "Failed to start server");
+    }
 
     if (tasks_start_all() != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start RTOS tasks");
