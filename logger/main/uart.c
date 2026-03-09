@@ -305,9 +305,17 @@ void uart_output_task(void *param) {
                     printf("3 - Start CAN logging\n");
                     printf("4 - Show memory info\n");
                     printf("5 - Show CPU usage\n");
+                    printf("A - Report analog values\n");
+                    printf("C - CAN message debug\n");
                     printf("D - Toggle DTC info display\n");
                     printf("F - Change log file name\n");
+                    printf("G - Display GPS info\n");
+                    printf("I - Increment log file number\n");
                     printf("R - Restart system\n");
+                    printf("S - Display steering info\n");
+                    printf("T - Display IMU data\n");
+                    printf("W - Display wheel board info\n");
+                    printf("X - Display strain gauge info\n");
                     printf("H - Show this help menu\n");
                     printf("ESC - Clear screen\n");
                     printf("================================\n");
@@ -377,11 +385,13 @@ void uart_output_task(void *param) {
                     break;
                 case 'X':
                 case 'x':
-                    uint16_t flsg = logBuffer[FL_SG1] << 8 | logBuffer[FL_SG];
-                    uint16_t frsg = logBuffer[FR_SG1] << 8 | logBuffer[FR_SG];
-                    uint16_t rlsg = logBuffer[RL_SG1] << 8 | logBuffer[RL_SG];
-                    uint16_t rrsg = logBuffer[RR_SG1] << 8 | logBuffer[RR_SG];
-                    printf(" FRSG: %u\tFLSG: %u\tRRSG: %u\tRLSG: %u\r\n", frsg, flsg, rrsg, rlsg);
+                    int16_t flsg = logBuffer[FL_SG1] << 8 | logBuffer[FL_SG];
+                    int16_t frsg = logBuffer[FR_SG1] << 8 | logBuffer[FR_SG];
+                    int16_t rlsg = logBuffer[RL_SG1] << 8 | logBuffer[RL_SG];
+                    int16_t rrsg = logBuffer[RR_SG1] << 8 | logBuffer[RR_SG];
+                    double pr1 = (double)(2.4152 * frsg) + (double)(-10973.1053);
+                    double pr2 = (double)(1.9029 * frsg) + (double)(-3305.5943);
+                    printf(" FRSG: %d\tFLSG: %d\tRRSG: %d\tRLSG: %d\tPR1: %.3f\tPR2: %.3f\r\n", frsg, flsg, rrsg, rlsg, pr1, pr2);
                     break;
 
                     
