@@ -212,13 +212,13 @@ void uart_output_task(void *param) {
                 case 'a':
                 case 'A':
                     printf("=== Option A: Report Analog ===\n");
-                    printf("Front Brake Pressure: %u\n", (logBuffer[F_BRAKEPRESSURE1] << 8) | logBuffer[F_BRAKEPRESSURE]);
-                    printf("Rear Brake Pressure:  %u\n", (logBuffer[R_BRAKEPRESSURE1] << 8) | logBuffer[R_BRAKEPRESSURE]);
-                    printf("Steering Position:    %u\n", (logBuffer[STEERING1] << 8) | logBuffer[STEERING]);
-                    printf("Front Left Shock:     %u\n", (logBuffer[FLSHOCK1] << 8) | logBuffer[FLSHOCK]);
-                    printf("Front Right Shock:    %u\n", (logBuffer[FRSHOCK1] << 8) | logBuffer[FRSHOCK]);
-                    printf("Rear Left Shock:      %u\n", (logBuffer[RLSHOCK1] << 8) | logBuffer[RLSHOCK]);
-                    printf("Rear Right Shock:     %u\n", (logBuffer[RRSHOCK1] << 8) | logBuffer[RRSHOCK]);
+                    printf("Front Brake Pressure: %u\n", (logBuffer[LOG_BYTE(F_BRAKEPRESSURE, 1)] << 8) | logBuffer[F_BRAKEPRESSURE]);
+                    printf("Rear Brake Pressure:  %u\n", (logBuffer[LOG_BYTE(R_BRAKEPRESSURE, 1)] << 8) | logBuffer[R_BRAKEPRESSURE]);
+                    printf("Steering Position:    %u\n", (logBuffer[LOG_BYTE(STEERING, 1)] << 8) | logBuffer[STEERING]);
+                    printf("Front Left Shock:     %u\n", (logBuffer[LOG_BYTE(FLSHOCK, 1)] << 8) | logBuffer[FLSHOCK]);
+                    printf("Front Right Shock:    %u\n", (logBuffer[LOG_BYTE(FRSHOCK, 1)] << 8) | logBuffer[FRSHOCK]);
+                    printf("Rear Left Shock:      %u\n", (logBuffer[LOG_BYTE(RLSHOCK, 1)] << 8) | logBuffer[RLSHOCK]);
+                    printf("Rear Right Shock:     %u\n", (logBuffer[LOG_BYTE(RRSHOCK, 1)] << 8) | logBuffer[RRSHOCK]);
                     break;
                 
                 case 'c':
@@ -325,15 +325,15 @@ void uart_output_task(void *param) {
                     // Reconstruct little-endian 32-bit signed values from logBuffer
                     int32_t gps_lon = (int32_t)(
                         (uint32_t)logBuffer[GPS_LON] |
-                        ((uint32_t)logBuffer[GPS_LON1] << 8) |
-                        ((uint32_t)logBuffer[GPS_LON2] << 16) |
-                        ((uint32_t)logBuffer[GPS_LON3] << 24)
+                        ((uint32_t)logBuffer[LOG_BYTE(GPS_LON, 1)] << 8) |
+                        ((uint32_t)logBuffer[LOG_BYTE(GPS_LON, 2)] << 16) |
+                        ((uint32_t)logBuffer[LOG_BYTE(GPS_LON, 3)] << 24)
                         );
                     int32_t gps_lat = (int32_t)(
                         (uint32_t)logBuffer[GPS_LAT] |
-                        ((uint32_t)logBuffer[GPS_LAT1] << 8) |
-                        ((uint32_t)logBuffer[GPS_LAT2] << 16) |
-                        ((uint32_t)logBuffer[GPS_LAT3] << 24)
+                        ((uint32_t)logBuffer[LOG_BYTE(GPS_LAT, 1)] << 8) |
+                        ((uint32_t)logBuffer[LOG_BYTE(GPS_LAT, 2)] << 16) |
+                        ((uint32_t)logBuffer[LOG_BYTE(GPS_LAT, 3)] << 24)
                     );
                     printf("=== Display GPS Info ===\n");
                     printf("GPS -> LON: %ld\tLAT: %ld\tFIX: %d\n", gps_lon, gps_lat, logBuffer[GPS_FIX]);
@@ -346,7 +346,7 @@ void uart_output_task(void *param) {
                     break;
                 case 's':
                 case 'S':
-                    float angle = (0.084769f) * (float)((uint16_t)(logBuffer[STEERING1] << 8 | logBuffer[STEERING])) - (152.846451f);                  
+                    float angle = (0.084769f) * (float)((uint16_t)(logBuffer[LOG_BYTE(STEERING, 1)] << 8 | logBuffer[STEERING])) - (152.846451f);
                     printf("=== Display Steering Info ===\n");
                     printf("Steer Angle: %.2f deg\r\n", angle);
                     break;
@@ -362,21 +362,21 @@ void uart_output_task(void *param) {
                     printf("=== Display Wheel Board Info ===\n");
                     /* Recombine 16-bit values stored as two bytes in logBuffer:
                        high byte at *_1 index, low byte at base index (see main.c usage) */
-                    uint16_t flw_rpm = (uint16_t)((logBuffer[FLW_RPM1] << 8) | logBuffer[FLW_RPM]);
-                    float flw_obj = (float)(((uint16_t)((logBuffer[FLW_OBJ1] << 8) | logBuffer[FLW_OBJ]))*0.02 - 273.15);
-                    float flw_amb = (float)(((uint16_t)((logBuffer[FLW_AMB1] << 8) | logBuffer[FLW_AMB]))*0.02 - 273.15);
+                          uint16_t flw_rpm = (uint16_t)((logBuffer[LOG_BYTE(FLW_RPM, 1)] << 8) | logBuffer[FLW_RPM]);
+                          float flw_obj = (float)(((uint16_t)((logBuffer[LOG_BYTE(FLW_OBJ, 1)] << 8) | logBuffer[FLW_OBJ]))*0.02 - 273.15);
+                          float flw_amb = (float)(((uint16_t)((logBuffer[LOG_BYTE(FLW_AMB, 1)] << 8) | logBuffer[FLW_AMB]))*0.02 - 273.15);
 
-                    uint16_t frw_rpm = (uint16_t)((logBuffer[FRW_RPM1] << 8) | logBuffer[FRW_RPM]);
-                    float frw_obj = (float)(((uint16_t)((logBuffer[FRW_OBJ1] << 8) | logBuffer[FRW_OBJ]))*0.02 - 273.15);
-                    float frw_amb = (float)(((uint16_t)((logBuffer[FRW_AMB1] << 8) | logBuffer[FRW_AMB]))*0.02 - 273.15);
+                          uint16_t frw_rpm = (uint16_t)((logBuffer[LOG_BYTE(FRW_RPM, 1)] << 8) | logBuffer[FRW_RPM]);
+                          float frw_obj = (float)(((uint16_t)((logBuffer[LOG_BYTE(FRW_OBJ, 1)] << 8) | logBuffer[FRW_OBJ]))*0.02 - 273.15);
+                          float frw_amb = (float)(((uint16_t)((logBuffer[LOG_BYTE(FRW_AMB, 1)] << 8) | logBuffer[FRW_AMB]))*0.02 - 273.15);
 
-                    uint16_t rrw_rpm = (uint16_t)((logBuffer[RRW_RPM1] << 8) | logBuffer[RRW_RPM]);
-                    float rrw_obj = (float)(((uint16_t)((logBuffer[RRW_OBJ1] << 8) | logBuffer[RRW_OBJ]))*0.02 - 273.15);
-                    float rrw_amb = (float)(((uint16_t)((logBuffer[RRW_AMB1] << 8) | logBuffer[RRW_AMB]))*0.02 - 273.15);
+                          uint16_t rrw_rpm = (uint16_t)((logBuffer[LOG_BYTE(RRW_RPM, 1)] << 8) | logBuffer[RRW_RPM]);
+                          float rrw_obj = (float)(((uint16_t)((logBuffer[LOG_BYTE(RRW_OBJ, 1)] << 8) | logBuffer[RRW_OBJ]))*0.02 - 273.15);
+                          float rrw_amb = (float)(((uint16_t)((logBuffer[LOG_BYTE(RRW_AMB, 1)] << 8) | logBuffer[RRW_AMB]))*0.02 - 273.15);
 
-                    uint16_t rlw_rpm = (uint16_t)((logBuffer[RLW_RPM1] << 8) | logBuffer[RLW_RPM]);
-                    float rlw_obj = (float)(((uint16_t)((logBuffer[RLW_OBJ1] << 8) | logBuffer[RLW_OBJ]))*0.02 - 273.15);
-                    float rlw_amb = (float)(((uint16_t)((logBuffer[RLW_AMB1] << 8) | logBuffer[RLW_AMB]))*0.02 - 273.15);
+                          uint16_t rlw_rpm = (uint16_t)((logBuffer[LOG_BYTE(RLW_RPM, 1)] << 8) | logBuffer[RLW_RPM]);
+                          float rlw_obj = (float)(((uint16_t)((logBuffer[LOG_BYTE(RLW_OBJ, 1)] << 8) | logBuffer[RLW_OBJ]))*0.02 - 273.15);
+                          float rlw_amb = (float)(((uint16_t)((logBuffer[LOG_BYTE(RLW_AMB, 1)] << 8) | logBuffer[RLW_AMB]))*0.02 - 273.15);
 
                     printf("FLW -> RPM: %u\tAMB: %.2f\tOBJ: %.2f\n", flw_rpm, flw_amb, flw_obj);
                     printf("FRW -> RPM: %u\tAMB: %.2f\tOBJ: %.2f\n", frw_rpm, frw_amb, frw_obj);
@@ -385,10 +385,10 @@ void uart_output_task(void *param) {
                     break;
                 case 'X':
                 case 'x':
-                    int16_t flsg = logBuffer[FL_SG1] << 8 | logBuffer[FL_SG];
-                    int16_t frsg = logBuffer[FR_SG1] << 8 | logBuffer[FR_SG];
-                    int16_t rlsg = logBuffer[RL_SG1] << 8 | logBuffer[RL_SG];
-                    int16_t rrsg = logBuffer[RR_SG1] << 8 | logBuffer[RR_SG];
+                    int16_t flsg = logBuffer[LOG_BYTE(FL_SG, 1)] << 8 | logBuffer[FL_SG];
+                    int16_t frsg = logBuffer[LOG_BYTE(FR_SG, 1)] << 8 | logBuffer[FR_SG];
+                    int16_t rlsg = logBuffer[LOG_BYTE(RL_SG, 1)] << 8 | logBuffer[RL_SG];
+                    int16_t rrsg = logBuffer[LOG_BYTE(RR_SG, 1)] << 8 | logBuffer[RR_SG];
                     double pr1 = (double)(2.4152 * frsg) + (double)(-10973.1053);
                     double pr2 = (double)(1.9029 * frsg) + (double)(-3305.5943);
                     printf(" FRSG: %d\tFLSG: %d\tRRSG: %d\tRLSG: %d\tPR1: %.3f\tPR2: %.3f\r\n", frsg, flsg, rrsg, rlsg, pr1, pr2);

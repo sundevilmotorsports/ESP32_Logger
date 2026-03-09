@@ -79,36 +79,42 @@ static void process_can_message(twai_frame_t *message)
     switch (message->header.id)
     {
     //Slip Angles
-    case 0x1:
+    case 0x1: {
         int16_t raw = (int16_t)((data[1] << 8) | data[0]);
         double slipAngleDeg = raw * 0.0013733329264;
         slipAngles[0] = slipAngleDeg;
         break;
-    case 0x2:
+    }
+    case 0x2: {
         int16_t raw = (int16_t)((data[1] << 8) | data[0]);
         double slipAngleDeg = raw * 0.0013733329264;
         slipAngles[1] = slipAngleDeg;
         break;
-    case 0x3:
+    }
+    case 0x3: {
         int16_t raw = (int16_t)((data[1] << 8) | data[0]);
         double slipAngleDeg = raw * 0.0013733329264;
         slipAngles[2] = slipAngleDeg;
         break;
-    case 0x4:
+    }
+    case 0x4: {
         int16_t raw = (int16_t)((data[1] << 8) | data[0]);
         double slipAngleDeg = raw * 0.0013733329264;
         slipAngles[3] = slipAngleDeg;
         break;
-    case 0x5:
+    }
+    case 0x5: {
         int16_t raw = (int16_t)((data[1] << 8) | data[0]);
         double slipAngleDeg = raw * 0.0013733329264;
         slipAngles[4] = slipAngleDeg;
         break;
-    case 0x6:
+    }
+    case 0x6: {
         int16_t raw = (int16_t)((data[1] << 8) | data[0]);
         double slipAngleDeg = raw * 0.0013733329264;
         slipAngles[5] = slipAngleDeg;
         break;
+    }
 
     case 0x35F:
         drs = data[0];

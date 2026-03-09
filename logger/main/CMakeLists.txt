@@ -1,6 +1,7 @@
 idf_component_register(SRCS     "gnss.c" 
                                 "adc.c" 
                                 "ina260.c" 
+                                "log_chnl.c"
                                 "logger.c" 
                                 "main.c"
                                 "dtc.c"

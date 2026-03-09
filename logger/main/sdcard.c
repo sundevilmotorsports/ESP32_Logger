@@ -16,7 +16,6 @@
 #include "esp_system.h"
 
 
-#define LOG_CHANNEL_NAMES
 #include "log_chnl.h"
 
 static const char* TAG = "FILE_SYS";
@@ -360,37 +359,15 @@ static esp_err_t open_log_file(const char *filename_in) {
     
     ESP_LOGI(TAG, "Opened log file: %s", filename);
 
-    // Build CSV header string (use heap to avoid stack overflow)
-    size_t csv_buf_size = 2048; // initial allocation
-    char *csv_header = malloc(csv_buf_size);
+    // Build CSV header from schema so labels stay aligned with field definitions.
+    size_t header_len = log_csv_header_required_len(true);
+    char *csv_header = malloc(header_len + 1U);
     if (csv_header == NULL) {
         ESP_LOGE(TAG, "Not enough heap to allocate CSV header buffer");
         xSemaphoreGive(log_file_mutex);
         return ESP_ERR_NO_MEM;
     }
-    size_t header_len = 0;
-
-    for (int i = 0; i < (sizeof(log_channel_names)/sizeof(log_channel_names[0])); i++) {
-        size_t name_len = strlen(log_channel_names[i]);
-
-        // Grow buffer if necessary
-        if (header_len + name_len >= csv_buf_size) {
-            size_t new_size = csv_buf_size * 2;
-            while (header_len + name_len >= new_size) new_size *= 2;
-            char *tmp = realloc(csv_header, new_size);
-            if (tmp == NULL) {
-                ESP_LOGE(TAG, "Failed to grow CSV header buffer");
-                free(csv_header);
-                xSemaphoreGive(log_file_mutex);
-                return ESP_ERR_NO_MEM;
-            }
-            csv_header = tmp;
-            csv_buf_size = new_size;
-        }
-
-        memcpy(csv_header + header_len, log_channel_names[i], name_len);
-        header_len += name_len;
-    }
+    header_len = log_build_csv_header(csv_header, header_len + 1U, true);
 
 
 
