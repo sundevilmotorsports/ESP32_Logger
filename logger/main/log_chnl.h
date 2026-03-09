@@ -127,6 +127,40 @@
     X(DTC_IMU) \
     X(GPS_0_) \
     X(GPS_1_) \
+    X(SLIP_ANG_1_) \
+    X(SLIP_ANG_1_1) \
+    X(SLIP_ANG_2_) \
+    X(SLIP_ANG_2_1) \
+    X(SLIP_ANG_3_) \
+    X(SLIP_ANG_3_1) \
+    X(SLIP_ANG_4_) \
+    X(SLIP_ANG_4_1) \
+    X(SLIP_ANG_5_) \
+    X(SLIP_ANG_5_1) \
+    X(SLIP_ANG_6_) \
+    X(SLIP_ANG_6_1) \
+    X(LR_X_Force) \ 
+    X(LR_X_Force1) \
+    X(LR_Y_Force) \
+    X(LR_Y_Force1) \
+    X(LR_Z_Force) \
+    X(LR_Z_Force1) \
+    X(LR_MX_Moment) \
+    X(LR_MX_Moment1) \
+    X(LR_MY_Force) \
+    X(LR_MY_Force1) \
+    X(LR_MZ_Force) \
+    X(LR_MZ_Force1) \
+    X(LR_Velocity) \
+    X(LR_Velocity1) \
+    X(LR_Position) \
+    X(LR_Position1) \
+    X(LR_X_Acceleration) \
+    X(LR_X_Acceleration1) \
+    X(LR_Y_Acceleration) \
+    X(LR_Y_Acceleration1) \
+    X(LR_Z_Acceleration) \
+    X(LR_Z_Acceleration1) \
     X(CH_COUNT)
 
 // Generate the enum using the macro
@@ -150,10 +184,31 @@ typedef struct{
     int16_t z;
 } imu_gyro_t;
 
+typedef struct{
+    int16_t LR_X_Force;
+    int16_t LR_Y_Force;
+    int16_t LR_Z_Force;
+    int16_t LR_MX_Moment;
+} LR_A_t;
+typedef struct{
+    int16_t LR_MY_Force;
+    int16_t LR_MZ_Force;
+    int16_t LR_Velocity;
+    int16_t LR_Position;
+} LR_B_t;
+typedef struct{
+    int16_t LR_X_Acceleration;
+    int16_t LR_Y_Acceleration;
+    int16_t LR_Z_Acceleration;
+
+} LR_C_t;
+
 extern imu_accel_t imu_accel;
 extern imu_gyro_t  imu_gyro;
 extern uint8_t ect, tps, aps, shift0, shift1, shift2;
-
+extern LR_A_t LR_A;
+extern LR_B_t LR_B;
+extern LR_C_t LR_C;
 
 // Optional: Generate string names for debugging/logging
 #ifdef LOG_CHANNEL_NAMES

@@ -62,7 +62,11 @@ uint8_t ect = 0, tps = 0, aps = 0, shift0 = 0, shift1 = 0, shift2 = 0;
 imu_accel_t imu_accel;
 imu_gyro_t imu_gyro;
 
-double slipAngles[6] = {0};
+int16_t slipAngles[6] = {0};
+
+LR_A_t LR_A;
+LR_B_t LR_B;
+LR_C_t LR_C;
 
 
 static void process_can_message(twai_frame_t *message)
@@ -79,36 +83,49 @@ static void process_can_message(twai_frame_t *message)
     switch (message->header.id)
     {
     //Slip Angles
-    case 0x1:
+    case 0x01:{
         int16_t raw = (int16_t)((data[1] << 8) | data[0]);
-        double slipAngleDeg = raw * 0.0013733329264;
-        slipAngles[0] = slipAngleDeg;
+        slipAngles[0] = raw;
         break;
-    case 0x2:
+    }
+    case 0x02:{
         int16_t raw = (int16_t)((data[1] << 8) | data[0]);
-        double slipAngleDeg = raw * 0.0013733329264;
-        slipAngles[1] = slipAngleDeg;
+        slipAngles[1] = raw;
         break;
-    case 0x3:
+    }
+    case 0x03:{
         int16_t raw = (int16_t)((data[1] << 8) | data[0]);
-        double slipAngleDeg = raw * 0.0013733329264;
-        slipAngles[2] = slipAngleDeg;
+        slipAngles[2] = raw;
         break;
-    case 0x4:
+    }
+    case 0x04:{
         int16_t raw = (int16_t)((data[1] << 8) | data[0]);
-        double slipAngleDeg = raw * 0.0013733329264;
-        slipAngles[3] = slipAngleDeg;
+        slipAngles[3] = raw;
         break;
-    case 0x5:
+    }
+    case 0x05:{
         int16_t raw = (int16_t)((data[1] << 8) | data[0]);
-        double slipAngleDeg = raw * 0.0013733329264;
-        slipAngles[4] = slipAngleDeg;
+        slipAngles[4] = raw;
         break;
-    case 0x6:
+    }
+    case 0x06:{
         int16_t raw = (int16_t)((data[1] << 8) | data[0]);
-        double slipAngleDeg = raw * 0.0013733329264;
-        slipAngles[5] = slipAngleDeg;
+        slipAngles[5] = raw;
         break;
+    }
+
+
+    // WFT Data
+    case 0x51:
+        memcpy(&LR_A, data, 8);
+        break;
+    case 0x52:
+        memcpy(&LR_B, data, 8);
+        break;
+    case 0x53:
+        memcpy(&LR_C, data, 6);
+        break;
+
 
     case 0x35F:
         drs = data[0];
@@ -395,6 +412,34 @@ void logBuffer_task(void *pvParamaters)
         loggerEmplaceU32(logBuffer, GPS_LON, GNSS_Handle.lon);
         loggerEmplaceU32(logBuffer, GPS_SPD, GNSS_Handle.gSpeed);
         logBuffer[GPS_FIX] = GNSS_Handle.fixType;
+
+        //Slip Angle Log Emplace
+        loggerEmplaceU16(logBuffer, SLIP_ANG_1_, slipAngles[0]);
+        loggerEmplaceU16(logBuffer, SLIP_ANG_2_, slipAngles[1]);
+        loggerEmplaceU16(logBuffer, SLIP_ANG_3_, slipAngles[2]);
+        loggerEmplaceU16(logBuffer, SLIP_ANG_4_, slipAngles[3]);
+        loggerEmplaceU16(logBuffer, SLIP_ANG_5_, slipAngles[4]);
+        loggerEmplaceU16(logBuffer, SLIP_ANG_6_, slipAngles[5]);
+
+
+        loggerEmplaceU16(logBuffer, LR_X_Force, LR_A.LR_X_Force);
+        loggerEmplaceU16(logBuffer, LR_Y_Force, LR_A.LR_Y_Force);
+        loggerEmplaceU16(logBuffer, LR_Z_Force, LR_A.LR_Z_Force);
+        loggerEmplaceU16(logBuffer, LR_MX_Moment, LR_A.LR_MX_Moment);
+
+        loggerEmplaceU16(logBuffer,LR_MY_Force,LR_B.LR_MY_Force);
+        loggerEmplaceU16(logBuffer,LR_MZ_Force,LR_B.LR_MZ_Force);
+        loggerEmplaceU16(logBuffer,LR_Velocity,LR_B.LR_Velocity);
+        loggerEmplaceU16(logBuffer,LR_Position,LR_B.LR_Position);
+
+        loggerEmplaceU16(logBuffer,LR_X_Acceleration,LR_C.LR_X_Acceleration);
+        loggerEmplaceU16(logBuffer,LR_Y_Acceleration,LR_C.LR_Y_Acceleration);
+        loggerEmplaceU16(logBuffer,LR_Z_Acceleration,LR_C.LR_Z_Acceleration);
+
+
+
+
+
 
         // // Write Data to SD Card - mutex handling is internal
         // esp_err_t result = fast_log_buffer(logBuffer, CH_COUNT);
