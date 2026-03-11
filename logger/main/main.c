@@ -33,8 +33,7 @@ const char compileDateTime[] = __DATE__ " " __TIME__;
 
 static const char *TAG = "MAIN_APP";
 
-typedef struct
-{
+typedef struct{
     uint16_t ambTemp;
     uint16_t objTemp;
     uint16_t rpm;
@@ -52,6 +51,7 @@ uint32_t imuCount = 0;
 int16_t frsg = 0, flsg = 0, rrsg = 0, rlsg = 0;
 
 wheel_data_s_t frw, flw, rlw, rrw;
+tiretemp_data frt, flt, rlt, rrt;
 uint8_t testNo = 0;
 uint8_t canFifoFull = 0;
 uint8_t drs = 0;
@@ -114,6 +114,18 @@ static void process_can_message(twai_frame_t *message)
         break;
     }
 
+    case 0x40:
+        // Shifter Data
+        shift0 = data[0];
+        shift1 = data[1];
+        shift2 = data[2];
+        if ((shift1 != 1) | (shift2 != 1))
+        {
+            TXDAT[1] = shift1;
+            TXDAT[2] = shift2;
+        }
+        DTC_CAN_Response_Measurement(dtc_devices[shifter_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+        break;
 
     // WFT Data
     case 0x51:
@@ -125,8 +137,7 @@ static void process_can_message(twai_frame_t *message)
     case 0x53:
         memcpy(&LR_C, data, 6);
         break;
-
-
+        
     case 0x35F:
         drs = data[0];
         break;
@@ -139,7 +150,7 @@ static void process_can_message(twai_frame_t *message)
         DTC_CAN_Response_Measurement(dtc_devices[imu_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
         break;
 
-    case 0x363:
+    case 0x370:
         // Front Left Wheel Board
         flw.rpm = data[0] << 8 | data[1];
         flw.objTemp = data[2] << 8 | data[3];
@@ -148,8 +159,14 @@ static void process_can_message(twai_frame_t *message)
         // DTC Response Update
         DTC_CAN_Response_Measurement(dtc_devices[flWheelBoard_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
         break;
+    case 0x371:
+        memcpy(data, &flt.tiretemp1, sizeof(flt.tiretemp1));
+        break;
+    case 0x372:
+        memcpy(data, &flt.tiretemp2, sizeof(flt.tiretemp2));
+        break;
 
-    case 0x364:
+    case 0x380:
         // Front Right Wheel Board
         frw.rpm = data[0] << 8 | data[1];
         frw.objTemp = data[2] << 8 | data[3];
@@ -158,8 +175,14 @@ static void process_can_message(twai_frame_t *message)
         // DTC Response Update
         DTC_CAN_Response_Measurement(dtc_devices[frWheelBoard_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
         break;
+    case 0x381:
+        memcpy(data, &frt.tiretemp1, sizeof(frt.tiretemp1));
+        break;
+    case 0x382:
+        memcpy(data, &frt.tiretemp2, sizeof(frt.tiretemp2));
+        break;
 
-    case 0x365:
+    case 0x390:
         // Rear Right Wheel Board
         rrw.rpm = data[0] << 8 | data[1];
         rrw.objTemp = data[2] << 8 | data[3];
@@ -168,49 +191,28 @@ static void process_can_message(twai_frame_t *message)
         // DTC Response Update
         DTC_CAN_Response_Measurement(dtc_devices[rrWheelBoard_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
         break;
+    case 0x391:
+        memcpy(data, &rrt.tiretemp1, sizeof(rrt.tiretemp1));
+        break;
+    case 0x392:
+        memcpy(data, &rrt.tiretemp2, sizeof(rrt.tiretemp2));
+        break;
 
-    case 0x366:
+    case 0x3a0:
         // Rear Left Wheel Board
         rlw.rpm = data[0] << 8 | data[1];
         rlw.objTemp = data[2] << 8 | data[3];
         rlw.ambTemp = data[4] << 8 | data[5];
-
+        
         // DTC Response Update
         DTC_CAN_Response_Measurement(dtc_devices[rlWheelBoard_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
         break;
-
-    case 0x4e2:
-        // Front Left String Gauge
-        flsg = data[0] << 8 | data[1];
-
-        // String Gauge DTC Check
-        DTC_CAN_Response_Measurement(dtc_devices[flStrainGauge_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
-
+    case 0x3a1:
+        memcpy(data, &rlt.tiretemp1, sizeof(rlt.tiretemp1));
         break;
-
-    case 0x4e3:
-        // Front Right String Gauge
-        frsg = data[0] << 8 | data[1];
-
-        // String Gauge DTC Check
-        DTC_CAN_Response_Measurement(dtc_devices[frStrainGauge_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
-        break;
-
-    case 0x4e4:
-        // Rear Right String Gauge
-        rrsg = data[0] << 8 | data[1];
-
-        // String Gauge DTC Check
-        DTC_CAN_Response_Measurement(dtc_devices[rrStrainGauge_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
-        break;
-
-    case 0x4e5:
-        // Rear Left String Gauge
-        rlsg = data[0] << 8 | data[1];
-
-        // String Gauge DTC Check
-        DTC_CAN_Response_Measurement(dtc_devices[rlStrainGauge_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
-        break;
+    case 0x3a2:
+    memcpy(data, &rlt.tiretemp2, sizeof(rlt.tiretemp2));
+    break;
 
     case 0x3e8:
         // Engine CAN Stream 2
@@ -235,18 +237,37 @@ static void process_can_message(twai_frame_t *message)
             break;
         }
         break;
+    
+    case 0x4e2:
+        // Front Left String Gauge
+        flsg = data[0] << 8 | data[1];
 
-    case 0x40:
-        // Shifter Data
-        shift0 = data[0];
-        shift1 = data[1];
-        shift2 = data[2];
-        if ((shift1 != 1) | (shift2 != 1))
-        {
-            TXDAT[1] = shift1;
-            TXDAT[2] = shift2;
-        }
-        DTC_CAN_Response_Measurement(dtc_devices[shifter_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
+        // String Gauge DTC Check
+        DTC_CAN_Response_Measurement(dtc_devices[flStrainGauge_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
+        break;
+
+    case 0x4e3:
+        // Front Right String Gauge
+        frsg = data[0] << 8 | data[1];
+
+        // String Gauge DTC Check
+        DTC_CAN_Response_Measurement(dtc_devices[frStrainGauge_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
+        break;
+
+    case 0x4e4:
+        // Rear Right String Gauge
+        rrsg = data[0] << 8 | data[1];
+
+        // String Gauge DTC Check
+        DTC_CAN_Response_Measurement(dtc_devices[rrStrainGauge_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
+        break;
+
+    case 0x4e5:
+        // Rear Left String Gauge
+        rlsg = data[0] << 8 | data[1];
+
+        // String Gauge DTC Check
+        DTC_CAN_Response_Measurement(dtc_devices[rlStrainGauge_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
         break;
 
     // Telemetry File Change Command
@@ -362,18 +383,26 @@ void logBuffer_task(void *pvParamaters)
         loggerEmplaceU16(logBuffer, FLW_AMB, flw.ambTemp);
         loggerEmplaceU16(logBuffer, FLW_OBJ, flw.objTemp);
         loggerEmplaceU16(logBuffer, FLW_RPM, flw.rpm);
+        loggerEmplaceU64(logBuffer, FLT_TTA, flt.tiretemp1);
+        loggerEmplaceU64(logBuffer, FLT_TTB, flt.tiretemp2);
 
         loggerEmplaceU16(logBuffer, FRW_AMB, frw.ambTemp);
         loggerEmplaceU16(logBuffer, FRW_OBJ, frw.objTemp);
         loggerEmplaceU16(logBuffer, FRW_RPM, frw.rpm);
+        loggerEmplaceU64(logBuffer, FRT_TTA, frt.tiretemp1);
+        loggerEmplaceU64(logBuffer, FRT_TTB, frt.tiretemp2);
 
         loggerEmplaceU16(logBuffer, RRW_AMB, rrw.ambTemp);
         loggerEmplaceU16(logBuffer, RRW_OBJ, rrw.objTemp);
         loggerEmplaceU16(logBuffer, RRW_RPM, rrw.rpm);
+        loggerEmplaceU64(logBuffer, RRT_TTA, rrt.tiretemp1);
+        loggerEmplaceU64(logBuffer, RRT_TTB, rrt.tiretemp2);
 
         loggerEmplaceU16(logBuffer, RLW_AMB, rlw.ambTemp);
         loggerEmplaceU16(logBuffer, RLW_OBJ, rlw.objTemp);
         loggerEmplaceU16(logBuffer, RLW_RPM, rlw.rpm);
+        loggerEmplaceU64(logBuffer, RLT_TTA, rlt.tiretemp1);
+        loggerEmplaceU64(logBuffer, RLT_TTB, rlt.tiretemp2);
 
         // Report String Gauge Data
         loggerEmplaceU16(logBuffer, FR_SG, frsg);

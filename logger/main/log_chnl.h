@@ -161,6 +161,62 @@
     X(LR_Y_Acceleration1) \
     X(LR_Z_Acceleration) \
     X(LR_Z_Acceleration1) \
+    X(FLT_TTA) \
+    X(FLT_TTA2) \
+    X(FLT_TTA3) \
+    X(FLT_TTA4) \
+    X(FLT_TTA5) \
+    X(FLT_TTA6) \
+    X(FLT_TTA7) \
+    X(FLT_TTB) \
+    X(FLT_TTB2) \
+    X(FLT_TTB3) \
+    X(FLT_TTB4) \
+    X(FLT_TTB5) \
+    X(FLT_TTB6) \
+    X(FLT_TTB7) \
+    X(FRT_TTA) \
+    X(FRT_TTA2) \
+    X(FRT_TTA3) \
+    X(FRT_TTA4) \
+    X(FRT_TTA5) \
+    X(FRT_TTA6) \
+    X(FRT_TTA7) \
+    X(FRT_TTB) \
+    X(FRT_TTB2) \
+    X(FRT_TTB3) \
+    X(FRT_TTB4) \
+    X(FRT_TTB5) \
+    X(FRT_TTB6) \
+    X(FRT_TTB7) \
+    X(RLT_TTA) \
+    X(RLT_TTA2) \
+    X(RLT_TTA3) \
+    X(RLT_TTA4) \
+    X(RLT_TTA5) \
+    X(RLT_TTA6) \
+    X(RLT_TTA7) \
+    X(RLT_TTB) \
+    X(RLT_TTB2) \
+    X(RLT_TTB3) \
+    X(RLT_TTB4) \
+    X(RLT_TTB5) \
+    X(RLT_TTB6) \
+    X(RLT_TTB7) \
+    X(RRT_TTA) \
+    X(RRT_TTA2) \
+    X(RRT_TTA3) \
+    X(RRT_TTA4) \
+    X(RRT_TTA5) \
+    X(RRT_TTA6) \
+    X(RRT_TTA7) \
+    X(RRT_TTB) \
+    X(RRT_TTB2) \
+    X(RRT_TTB3) \
+    X(RRT_TTB4) \
+    X(RRT_TTB5) \
+    X(RRT_TTB6) \
+    X(RRT_TTB7) \
     X(CH_COUNT)
 
 // Generate the enum using the macro
@@ -203,8 +259,14 @@ typedef struct{
 
 } LR_C_t;
 
+typedef struct{
+    uint64_t tiretemp1;
+    uint64_t tiretemp2;
+} tiretemp_data;
+
 extern imu_accel_t imu_accel;
 extern imu_gyro_t  imu_gyro;
+extern tiretemp_data frt, flt, rlt, rrt;
 extern uint8_t ect, tps, aps, shift0, shift1, shift2;
 extern LR_A_t LR_A;
 extern LR_B_t LR_B;
