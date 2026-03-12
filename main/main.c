@@ -207,6 +207,8 @@ static void process_can_message(twai_frame_t *message)
         // DTC Response Update
         DTC_CAN_Response_Measurement(dtc_devices[rlWheelBoard_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
         break;
+
+    //Rear Left Tire Temps
     case 0x3a1:
         memcpy(data, &rlt.tiretemp1, sizeof(rlt.tiretemp1));
         break;
@@ -266,7 +268,7 @@ static void process_can_message(twai_frame_t *message)
         // Rear Left String Gauge
         rlsg = data[0] << 8 | data[1];
 
-        // String Gauge DTC Check
+        // Strain Gauge DTC Check
         DTC_CAN_Response_Measurement(dtc_devices[rlStrainGauge_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
         break;
 

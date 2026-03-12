@@ -162,6 +162,7 @@
     X(LR_Z_Acceleration) \
     X(LR_Z_Acceleration1) \
     X(FLT_TTA) \
+    X(FLT_TTA1) \
     X(FLT_TTA2) \
     X(FLT_TTA3) \
     X(FLT_TTA4) \
@@ -169,6 +170,7 @@
     X(FLT_TTA6) \
     X(FLT_TTA7) \
     X(FLT_TTB) \
+    X(FLT_TTB1) \
     X(FLT_TTB2) \
     X(FLT_TTB3) \
     X(FLT_TTB4) \
@@ -176,6 +178,7 @@
     X(FLT_TTB6) \
     X(FLT_TTB7) \
     X(FRT_TTA) \
+    X(FRT_TTA1) \
     X(FRT_TTA2) \
     X(FRT_TTA3) \
     X(FRT_TTA4) \
@@ -183,6 +186,7 @@
     X(FRT_TTA6) \
     X(FRT_TTA7) \
     X(FRT_TTB) \
+    X(FRT_TTB1) \
     X(FRT_TTB2) \
     X(FRT_TTB3) \
     X(FRT_TTB4) \
@@ -190,6 +194,7 @@
     X(FRT_TTB6) \
     X(FRT_TTB7) \
     X(RLT_TTA) \
+    X(RLT_TTA1) \
     X(RLT_TTA2) \
     X(RLT_TTA3) \
     X(RLT_TTA4) \
@@ -197,6 +202,7 @@
     X(RLT_TTA6) \
     X(RLT_TTA7) \
     X(RLT_TTB) \
+    X(RLT_TTB1) \
     X(RLT_TTB2) \
     X(RLT_TTB3) \
     X(RLT_TTB4) \
@@ -204,6 +210,7 @@
     X(RLT_TTB6) \
     X(RLT_TTB7) \
     X(RRT_TTA) \
+    X(RRT_TTA1) \
     X(RRT_TTA2) \
     X(RRT_TTA3) \
     X(RRT_TTA4) \
@@ -211,6 +218,7 @@
     X(RRT_TTA6) \
     X(RRT_TTA7) \
     X(RRT_TTB) \
+    X(RRT_TTB1) \
     X(RRT_TTB2) \
     X(RRT_TTB3) \
     X(RRT_TTB4) \
