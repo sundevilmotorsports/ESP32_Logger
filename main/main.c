@@ -20,7 +20,7 @@
 #include "tasks.h"
 
 #define REFRESH_MS 10
-#define RING_CAP 256
+#define RING_CAP 512
 
 log_ring_t *log_ring;
 TaskHandle_t log_flush_task_handle = NULL;
@@ -391,26 +391,26 @@ void logBuffer_task(void *pvParamaters)
         loggerEmplaceU16(logBuffer, FLW_AMB, flw.ambTemp);
         loggerEmplaceU16(logBuffer, FLW_OBJ, flw.objTemp);
         loggerEmplaceU16(logBuffer, FLW_RPM, flw.rpm);
-        loggerEmplaceU64(logBuffer, FLT_TTA, flt.tiretemp1);
-        loggerEmplaceU64(logBuffer, FLT_TTB, flt.tiretemp2);
+        // loggerEmplaceU64(logBuffer, FLT_TTA, flt.tiretemp1);
+        // loggerEmplaceU64(logBuffer, FLT_TTB, flt.tiretemp2);
 
         loggerEmplaceU16(logBuffer, FRW_AMB, frw.ambTemp);
         loggerEmplaceU16(logBuffer, FRW_OBJ, frw.objTemp);
         loggerEmplaceU16(logBuffer, FRW_RPM, frw.rpm);
-        loggerEmplaceU64(logBuffer, FRT_TTA, frt.tiretemp1);
-        loggerEmplaceU64(logBuffer, FRT_TTB, frt.tiretemp2);
+        // loggerEmplaceU64(logBuffer, FRT_TTA, frt.tiretemp1);
+        // loggerEmplaceU64(logBuffer, FRT_TTB, frt.tiretemp2);
 
         loggerEmplaceU16(logBuffer, RRW_AMB, rrw.ambTemp);
         loggerEmplaceU16(logBuffer, RRW_OBJ, rrw.objTemp);
         loggerEmplaceU16(logBuffer, RRW_RPM, rrw.rpm);
-        loggerEmplaceU64(logBuffer, RRT_TTA, rrt.tiretemp1);
-        loggerEmplaceU64(logBuffer, RRT_TTB, rrt.tiretemp2);
+        // loggerEmplaceU64(logBuffer, RRT_TTA, rrt.tiretemp1);
+        // loggerEmplaceU64(logBuffer, RRT_TTB, rrt.tiretemp2);
 
         loggerEmplaceU16(logBuffer, RLW_AMB, rlw.ambTemp);
         loggerEmplaceU16(logBuffer, RLW_OBJ, rlw.objTemp);
         loggerEmplaceU16(logBuffer, RLW_RPM, rlw.rpm);
-        loggerEmplaceU64(logBuffer, RLT_TTA, rlt.tiretemp1);
-        loggerEmplaceU64(logBuffer, RLT_TTB, rlt.tiretemp2);
+        // loggerEmplaceU64(logBuffer, RLT_TTA, rlt.tiretemp1);
+        // loggerEmplaceU64(logBuffer, RLT_TTB, rlt.tiretemp2);
 
         // Report String Gauge Data
         loggerEmplaceU16(logBuffer, FR_SG, frsg);
