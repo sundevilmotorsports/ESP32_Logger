@@ -20,7 +20,7 @@
 #include "tasks.h"
 
 #define REFRESH_MS 10
-#define RING_CAP 500
+#define RING_CAP 256
 
 log_ring_t *log_ring;
 TaskHandle_t log_flush_task_handle = NULL;
@@ -62,12 +62,10 @@ uint8_t ect = 0, tps = 0, aps = 0, shift0 = 0, shift1 = 0, shift2 = 0;
 imu_accel_t imu_accel;
 imu_gyro_t imu_gyro;
 
-int16_t slipAngles[6] = {0};
-
-LR_A_t LR_A;
-LR_B_t LR_B;
-LR_C_t LR_C;
-
+SLIP_t SLIP;
+WFT_CAN1_t WFT_1;
+WFT_CAN2_t WFT_2;
+WFT_CAN3_t WFT_3;
 
 static void process_can_message(twai_frame_t *message)
 {
@@ -83,61 +81,59 @@ static void process_can_message(twai_frame_t *message)
     switch (message->header.id)
     {
     //Slip Angles
-    case 0x01:{
-        int16_t raw = (int16_t)((data[1] << 8) | data[0]);
-        slipAngles[0] = raw;
+    case 0x1:
+        SLIP.POS1 = data[0] | (data[1] << 8);
         break;
-    }
-    case 0x02:{
-        int16_t raw = (int16_t)((data[1] << 8) | data[0]);
-        slipAngles[1] = raw;
+    case 0x2:
+        SLIP.POS2 = data[0] | (data[1] << 8);
         break;
-    }
-    case 0x03:{
-        int16_t raw = (int16_t)((data[1] << 8) | data[0]);
-        slipAngles[2] = raw;
+    case 0x3:
+        SLIP.POS3 = data[0] | (data[1] << 8);
         break;
-    }
-    case 0x04:{
-        int16_t raw = (int16_t)((data[1] << 8) | data[0]);
-        slipAngles[3] = raw;
+    case 0x4:
+        SLIP.POS4 = data[0] | (data[1] << 8);
         break;
-    }
-    case 0x05:{
-        int16_t raw = (int16_t)((data[1] << 8) | data[0]);
-        slipAngles[4] = raw;
+    case 0x5:
+        SLIP.POS5 = data[0] | (data[1] << 8);
         break;
-    }
-    case 0x06:{
-        int16_t raw = (int16_t)((data[1] << 8) | data[0]);
-        slipAngles[5] = raw;
+    case 0x6:
+        SLIP.POS6 = data[0] | (data[1] << 8);
         break;
-    }
+    case 0x21:
+        WFT_1.Fx_Force = data[0] | (data[1] << 8);
+        WFT_1.Fy_Force = data[2] | (data[3] << 8);
+        WFT_1.Fz_Force = data[4] | (data[5] << 8);
+        WFT_1.Mx_Moment = data[6] | (data[7] << 8);
+        // printf("WFT Fx: %d, Fy: %d\n", Fx, Fy);
+        break;
+
+    case 0x22:
+        WFT_2.My_Moment = data[0] | (data[1] << 8);
+        WFT_2.Mz_Moment = data[2] | (data[3] << 8);
+        WFT_2.Wheelspeed = data[4] | (data[5] << 8);
+        WFT_2.Position = data[6] | (data[7] << 8);
+        //printf("WFT Fz: %d, Mx: %d\n", Fz, Mx);
+        break;
+
+    case 0x23:
+        WFT_3.X_Acceleration = data[0] | (data[1] << 8);
+        WFT_3.Y_Acceleration = data[1] | (data[2] << 8);
+        WFT_3.Z_Acceleration = data[3] | (data[4] << 8);
+        // printf("WFT My: %d, Mz: %d\n", My, Mz);
+        break;
 
     case 0x40:
         // Shifter Data
         shift0 = data[0];
         shift1 = data[1];
         shift2 = data[2];
-        if ((shift1 != 1) | (shift2 != 1))
-        {
+        if ((shift1 != 1) | (shift2 != 1)){
             TXDAT[1] = shift1;
             TXDAT[2] = shift2;
         }
         DTC_CAN_Response_Measurement(dtc_devices[shifter_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
         break;
 
-    // WFT Data
-    case 0x51:
-        memcpy(&LR_A, data, 8);
-        break;
-    case 0x52:
-        memcpy(&LR_B, data, 8);
-        break;
-    case 0x53:
-        memcpy(&LR_C, data, 6);
-        break;
-        
     case 0x35F:
         drs = data[0];
         break;
@@ -152,6 +148,7 @@ static void process_can_message(twai_frame_t *message)
 
     case 0x370:
         // Front Left Wheel Board
+        // printf("FL WB\n");
         flw.rpm = data[0] << 8 | data[1];
         flw.objTemp = data[2] << 8 | data[3];
         flw.ambTemp = data[4] << 8 | data[5];
@@ -165,25 +162,29 @@ static void process_can_message(twai_frame_t *message)
     case 0x372:
         memcpy(data, &flt.tiretemp2, sizeof(flt.tiretemp2));
         break;
-
+        
     case 0x380:
         // Front Right Wheel Board
+        // printf("FR WB\n");
         frw.rpm = data[0] << 8 | data[1];
         frw.objTemp = data[2] << 8 | data[3];
         frw.ambTemp = data[4] << 8 | data[5];
-
+        
         // DTC Response Update
         DTC_CAN_Response_Measurement(dtc_devices[frWheelBoard_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
         break;
     case 0x381:
+        // printf("FR Tire Temp1\n");
         memcpy(data, &frt.tiretemp1, sizeof(frt.tiretemp1));
         break;
     case 0x382:
+        // printf("FR Tire Temp2\n");
         memcpy(data, &frt.tiretemp2, sizeof(frt.tiretemp2));
-        break;
-
+    break;
+    
     case 0x390:
         // Rear Right Wheel Board
+        // printf("RR WB\n");
         rrw.rpm = data[0] << 8 | data[1];
         rrw.objTemp = data[2] << 8 | data[3];
         rrw.ambTemp = data[4] << 8 | data[5];
@@ -192,14 +193,17 @@ static void process_can_message(twai_frame_t *message)
         DTC_CAN_Response_Measurement(dtc_devices[rrWheelBoard_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
         break;
     case 0x391:
+        // printf("RR Tire Temp1\n");
         memcpy(data, &rrt.tiretemp1, sizeof(rrt.tiretemp1));
         break;
     case 0x392:
+        // printf("RR Tire Temp2\n");
         memcpy(data, &rrt.tiretemp2, sizeof(rrt.tiretemp2));
         break;
 
     case 0x3a0:
         // Rear Left Wheel Board
+        // printf("RL WB\n");
         rlw.rpm = data[0] << 8 | data[1];
         rlw.objTemp = data[2] << 8 | data[3];
         rlw.ambTemp = data[4] << 8 | data[5];
@@ -213,8 +217,8 @@ static void process_can_message(twai_frame_t *message)
         memcpy(data, &rlt.tiretemp1, sizeof(rlt.tiretemp1));
         break;
     case 0x3a2:
-    memcpy(data, &rlt.tiretemp2, sizeof(rlt.tiretemp2));
-    break;
+        memcpy(data, &rlt.tiretemp2, sizeof(rlt.tiretemp2));
+        break;
 
     case 0x3e8:
         // Engine CAN Stream 2
@@ -285,9 +289,10 @@ static void process_can_message(twai_frame_t *message)
         break;
 
     default:
-        // ESP_LOGI(TAG, "CAN Rx\tID: %x\r\n", message->header.id);
+        ESP_LOGI(TAG, "CAN Rx\tID: 0x%x\r\n", message->header.id);
         break;
     }
+    // printf("Recived CAN message 0x%lX\n", message->header.id);
 }
 
 void log_flush_task(void *pvParamaters)
@@ -316,14 +321,12 @@ void log_flush_task(void *pvParamaters)
 
         const size_t target_chunk_bytes = 4096; // Match SD file buffer size for better throughput.
         size_t chunk_entries = target_chunk_bytes / (size_t)CH_COUNT;
-        if (chunk_entries == 0)
-        {
+        if (chunk_entries == 0){
             chunk_entries = 1;
         }
 
         size_t entry_index = 0;
-        while (entry_index < entries)
-        {
+        while (entry_index < entries) {
             size_t remaining_entries = entries - entry_index;
             size_t write_entries = remaining_entries < chunk_entries ? remaining_entries : chunk_entries;
             size_t write_bytes = write_entries * (size_t)CH_COUNT;
@@ -355,13 +358,16 @@ void logBuffer_task(void *pvParamaters)
         if (adc_read_sync(&adc_vals) == ESP_OK)
         {
             // Log Analog Sensor Data using cached values
-            loggerEmplaceU16(logBuffer, F_BRAKEPRESSURE, adc_vals.adc0);
-            loggerEmplaceU16(logBuffer, R_BRAKEPRESSURE, adc_vals.adc1);
-            loggerEmplaceU16(logBuffer, STEERING, adc_vals.adc2);
-            loggerEmplaceU16(logBuffer, FLSHOCK, adc_vals.adc3);
-            loggerEmplaceU16(logBuffer, FRSHOCK, adc_vals.adc4);
-            loggerEmplaceU16(logBuffer, RRSHOCK, adc_vals.adc6);
-            loggerEmplaceU16(logBuffer, RLSHOCK, adc_vals.adc7);
+            loggerEmplaceU16(logBuffer, FRSHOCK, adc_vals.adc0);
+            loggerEmplaceU16(logBuffer, RRSHOCK, adc_vals.adc1);
+            loggerEmplaceU16(logBuffer, R_BRAKEPRESSURE, adc_vals.adc2); // Might be swapped
+            loggerEmplaceU16(logBuffer, RLSHOCK, adc_vals.adc3);
+            loggerEmplaceU16(logBuffer, F_BRAKEPRESSURE, adc_vals.adc4); // Might be swapped
+            // loggerEmplaceU16(logBuffer, RLSHOCK, adc_vals.adc5); // Unused
+            loggerEmplaceU16(logBuffer, FLSHOCK, adc_vals.adc6);
+            loggerEmplaceU16(logBuffer, STEERING, adc_vals.adc7);
+            // printf("Analog: FR Shock: %d, RR Shock: %d, Rear BSE:%d, RL Shock:%d, Front BSE:%d, Unused:%d, FL Shock:%d, Steering:%d\n", adc_vals.adc0,adc_vals.adc1,adc_vals.adc2,adc_vals.adc3,adc_vals.adc4,adc_vals.adc5,adc_vals.adc6,adc_vals.adc7);
+
         }
         else
         {
@@ -445,32 +451,27 @@ void logBuffer_task(void *pvParamaters)
         logBuffer[GPS_FIX] = GNSS_Handle.fixType;
 
         //Slip Angle Log Emplace
-        loggerEmplaceU16(logBuffer, SLIP_ANG_1_, slipAngles[0]);
-        loggerEmplaceU16(logBuffer, SLIP_ANG_2_, slipAngles[1]);
-        loggerEmplaceU16(logBuffer, SLIP_ANG_3_, slipAngles[2]);
-        loggerEmplaceU16(logBuffer, SLIP_ANG_4_, slipAngles[3]);
-        loggerEmplaceU16(logBuffer, SLIP_ANG_5_, slipAngles[4]);
-        loggerEmplaceU16(logBuffer, SLIP_ANG_6_, slipAngles[5]);
+        loggerEmplaceU16(logBuffer, SLIP_ANG_1_, SLIP.POS1);
+        loggerEmplaceU16(logBuffer, SLIP_ANG_2_, SLIP.POS2);
+        loggerEmplaceU16(logBuffer, SLIP_ANG_3_, SLIP.POS3);
+        loggerEmplaceU16(logBuffer, SLIP_ANG_4_, SLIP.POS4);
+        loggerEmplaceU16(logBuffer, SLIP_ANG_5_, SLIP.POS5);
+        loggerEmplaceU16(logBuffer, SLIP_ANG_6_, SLIP.POS6);
 
 
-        loggerEmplaceU16(logBuffer, LR_X_Force, LR_A.LR_X_Force);
-        loggerEmplaceU16(logBuffer, LR_Y_Force, LR_A.LR_Y_Force);
-        loggerEmplaceU16(logBuffer, LR_Z_Force, LR_A.LR_Z_Force);
-        loggerEmplaceU16(logBuffer, LR_MX_Moment, LR_A.LR_MX_Moment);
+        loggerEmplaceU16(logBuffer, WFT_FX_Force, WFT_1.Fx_Force);
+        loggerEmplaceU16(logBuffer, WFT_FY_Force, WFT_1.Fx_Force);
+        loggerEmplaceU16(logBuffer, WFT_FZ_Force, WFT_1.Fx_Force);
+        loggerEmplaceU16(logBuffer, WFT_MX_Moment, WFT_1.Mx_Moment);
 
-        loggerEmplaceU16(logBuffer,LR_MY_Force,LR_B.LR_MY_Force);
-        loggerEmplaceU16(logBuffer,LR_MZ_Force,LR_B.LR_MZ_Force);
-        loggerEmplaceU16(logBuffer,LR_Velocity,LR_B.LR_Velocity);
-        loggerEmplaceU16(logBuffer,LR_Position,LR_B.LR_Position);
+        loggerEmplaceU16(logBuffer,WFT_MY_Force,WFT_2.My_Moment);
+        loggerEmplaceU16(logBuffer,WFT_MZ_Force,WFT_2.Mz_Moment);
+        loggerEmplaceU16(logBuffer,WFT_Wheelspeed,WFT_2.Wheelspeed);
+        loggerEmplaceU16(logBuffer,WFT_Position,WFT_2.Position);
 
-        loggerEmplaceU16(logBuffer,LR_X_Acceleration,LR_C.LR_X_Acceleration);
-        loggerEmplaceU16(logBuffer,LR_Y_Acceleration,LR_C.LR_Y_Acceleration);
-        loggerEmplaceU16(logBuffer,LR_Z_Acceleration,LR_C.LR_Z_Acceleration);
-
-
-
-
-
+        loggerEmplaceU16(logBuffer,WFT_X_Acceleration,WFT_3.X_Acceleration);
+        loggerEmplaceU16(logBuffer,WFT_Y_Acceleration,WFT_3.Y_Acceleration);
+        loggerEmplaceU16(logBuffer,WFT_Z_Acceleration,WFT_3.Z_Acceleration);
 
         // // Write Data to SD Card - mutex handling is internal
         // esp_err_t result = fast_log_buffer(logBuffer, CH_COUNT);
@@ -529,6 +530,12 @@ void app_main(void)
     // Main loop - keep system alive
     while (1)
     {
+        printf("\033[2J\033[H");
+        printf("WFT CAN1: Fx: %d, Fy: %d, Fz:%d, Mz:%d\n", WFT_1.Fx_Force, WFT_1.Fy_Force, WFT_1.Fz_Force,WFT_1.Mx_Moment);
+        printf("WFT CAN2: My: %d, Mz: %d, Wheelspeed:%d, Position:%d\n", WFT_2.My_Moment, WFT_2.Mz_Moment, WFT_2.Wheelspeed,WFT_2.Position);
+        printf("WFT CAN3: X_Accel: %d, Y_Accel: %d, Z_Accel:%d\n", WFT_3.X_Acceleration, WFT_3.Y_Acceleration, WFT_3.Z_Acceleration);
+        printf("Slip: Ch1: %d, Ch2: %d, Ch3:%d, Ch4:%d, Ch5:%d, Ch6:%d\n", SLIP.POS1, SLIP.POS2, SLIP.POS3, SLIP.POS4, SLIP.POS5, SLIP.POS6);
+        // printf("Tire Temp FRT: %lld%lld RRT: %lld%lld\n", frt.tiretemp1, frt.tiretemp2, rrt.tiretemp1, rrt.tiretemp2);
         vTaskDelay(pdMS_TO_TICKS(5000));
         // ESP_LOGI(TAG, "System heartbeat - Free heap: %ld bytes", esp_get_free_heap_size());
     }

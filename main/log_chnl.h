@@ -139,28 +139,28 @@
     X(SLIP_ANG_5_1) \
     X(SLIP_ANG_6_) \
     X(SLIP_ANG_6_1) \
-    X(LR_X_Force) \ 
-    X(LR_X_Force1) \
-    X(LR_Y_Force) \
-    X(LR_Y_Force1) \
-    X(LR_Z_Force) \
-    X(LR_Z_Force1) \
-    X(LR_MX_Moment) \
-    X(LR_MX_Moment1) \
-    X(LR_MY_Force) \
-    X(LR_MY_Force1) \
-    X(LR_MZ_Force) \
-    X(LR_MZ_Force1) \
-    X(LR_Velocity) \
-    X(LR_Velocity1) \
-    X(LR_Position) \
-    X(LR_Position1) \
-    X(LR_X_Acceleration) \
-    X(LR_X_Acceleration1) \
-    X(LR_Y_Acceleration) \
-    X(LR_Y_Acceleration1) \
-    X(LR_Z_Acceleration) \
-    X(LR_Z_Acceleration1) \
+    X(WFT_FX_Force) \ 
+    X(WFT_FX_Force1) \
+    X(WFT_FY_Force) \
+    X(WFT_FY_Force1) \
+    X(WFT_FZ_Force) \
+    X(WFT_FZ_Force1) \
+    X(WFT_MX_Moment) \
+    X(WFT_MX_Moment1) \
+    X(WFT_MY_Force) \
+    X(WFT_MY_Force1) \
+    X(WFT_MZ_Force) \
+    X(WFT_MZ_Force1) \
+    X(WFT_Wheelspeed) \
+    X(WFT_Wheelspeed1) \
+    X(WFT_Position) \
+    X(WFT_Position1) \
+    X(WFT_X_Acceleration) \
+    X(WFT_X_Acceleration1) \
+    X(WFT_Y_Acceleration) \
+    X(WFT_Y_Acceleration1) \
+    X(WFT_Z_Acceleration) \
+    X(WFT_Z_Acceleration1) \
     X(FLT_TTA) \
     X(FLT_TTA1) \
     X(FLT_TTA2) \
@@ -249,36 +249,47 @@ typedef struct{
 } imu_gyro_t;
 
 typedef struct{
-    int16_t LR_X_Force;
-    int16_t LR_Y_Force;
-    int16_t LR_Z_Force;
-    int16_t LR_MX_Moment;
-} LR_A_t;
-typedef struct{
-    int16_t LR_MY_Force;
-    int16_t LR_MZ_Force;
-    int16_t LR_Velocity;
-    int16_t LR_Position;
-} LR_B_t;
-typedef struct{
-    int16_t LR_X_Acceleration;
-    int16_t LR_Y_Acceleration;
-    int16_t LR_Z_Acceleration;
+    int16_t Fx_Force;
+    int16_t Fy_Force;
+    int16_t Fz_Force;
+    int16_t Mx_Moment;
+} WFT_CAN1_t;
 
-} LR_C_t;
+typedef struct{
+    int16_t My_Moment;
+    int16_t Mz_Moment;
+    int16_t Wheelspeed;
+    int16_t Position;
+} WFT_CAN2_t;
+
+typedef struct{
+    int16_t X_Acceleration;
+    int16_t Y_Acceleration;
+    int16_t Z_Acceleration;
+} WFT_CAN3_t;
 
 typedef struct{
     uint64_t tiretemp1;
     uint64_t tiretemp2;
 } tiretemp_data;
 
+typedef struct{
+    int16_t POS1;
+    int16_t POS2;
+    int16_t POS3;
+    int16_t POS4;
+    int16_t POS5;
+    int16_t POS6;
+} SLIP_t;
+
 extern imu_accel_t imu_accel;
 extern imu_gyro_t  imu_gyro;
 extern tiretemp_data frt, flt, rlt, rrt;
 extern uint8_t ect, tps, aps, shift0, shift1, shift2;
-extern LR_A_t LR_A;
-extern LR_B_t LR_B;
-extern LR_C_t LR_C;
+extern WFT_CAN1_t WFT_1;
+extern WFT_CAN2_t WFT_2;
+extern WFT_CAN3_t WFT_3;
+extern SLIP_t SLIP;
 
 // Optional: Generate string names for debugging/logging
 #ifdef LOG_CHANNEL_NAMES
