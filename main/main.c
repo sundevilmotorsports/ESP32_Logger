@@ -20,7 +20,7 @@
 #include "tasks.h"
 
 #define REFRESH_MS 10
-#define RING_CAP 512
+#define RING_CAP 256
 
 log_ring_t *log_ring;
 TaskHandle_t log_flush_task_handle = NULL;
@@ -78,8 +78,7 @@ static void process_can_message(twai_frame_t *message)
 
     memcpy(data, message->buffer, copy_len);
 
-    switch (message->header.id)
-    {
+    switch (message->header.id){
     //Slip Angles
     case 0x1:
         SLIP.POS1 = data[0] | (data[1] << 8);
@@ -222,8 +221,7 @@ static void process_can_message(twai_frame_t *message)
 
     case 0x3e8:
         // Engine CAN Stream 2
-        switch (data[0])
-        {
+        switch (data[0]){
         // Frame 1
         case 0x0:
             // engine_speed = message->data[1] << 8 | message->data[2];
@@ -349,8 +347,7 @@ void logBuffer_task(void *pvParamaters)
 
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xPeriod = pdMS_TO_TICKS(REFRESH_MS);
-    while (1)
-    {
+    while (1){
         vTaskDelayUntil(&xLastWakeTime, xPeriod);
 
         // //Log Analog Sensor Data
@@ -368,9 +365,7 @@ void logBuffer_task(void *pvParamaters)
             loggerEmplaceU16(logBuffer, STEERING, adc_vals.adc7);
             // printf("Analog: FR Shock: %d, RR Shock: %d, Rear BSE:%d, RL Shock:%d, Front BSE:%d, Unused:%d, FL Shock:%d, Steering:%d\n", adc_vals.adc0,adc_vals.adc1,adc_vals.adc2,adc_vals.adc3,adc_vals.adc4,adc_vals.adc5,adc_vals.adc6,adc_vals.adc7);
 
-        }
-        else
-        {
+        }else{
             ESP_LOGW(TAG, "Using previous ADC values due to mutex timeout");
         }
 
@@ -391,26 +386,26 @@ void logBuffer_task(void *pvParamaters)
         loggerEmplaceU16(logBuffer, FLW_AMB, flw.ambTemp);
         loggerEmplaceU16(logBuffer, FLW_OBJ, flw.objTemp);
         loggerEmplaceU16(logBuffer, FLW_RPM, flw.rpm);
-        // loggerEmplaceU64(logBuffer, FLT_TTA, flt.tiretemp1);
-        // loggerEmplaceU64(logBuffer, FLT_TTB, flt.tiretemp2);
+        loggerEmplaceU64(logBuffer, FLT_TTA, flt.tiretemp1);
+        loggerEmplaceU64(logBuffer, FLT_TTB, flt.tiretemp2);
 
         loggerEmplaceU16(logBuffer, FRW_AMB, frw.ambTemp);
         loggerEmplaceU16(logBuffer, FRW_OBJ, frw.objTemp);
         loggerEmplaceU16(logBuffer, FRW_RPM, frw.rpm);
-        // loggerEmplaceU64(logBuffer, FRT_TTA, frt.tiretemp1);
-        // loggerEmplaceU64(logBuffer, FRT_TTB, frt.tiretemp2);
+        loggerEmplaceU64(logBuffer, FRT_TTA, frt.tiretemp1);
+        loggerEmplaceU64(logBuffer, FRT_TTB, frt.tiretemp2);
 
         loggerEmplaceU16(logBuffer, RRW_AMB, rrw.ambTemp);
         loggerEmplaceU16(logBuffer, RRW_OBJ, rrw.objTemp);
         loggerEmplaceU16(logBuffer, RRW_RPM, rrw.rpm);
-        // loggerEmplaceU64(logBuffer, RRT_TTA, rrt.tiretemp1);
-        // loggerEmplaceU64(logBuffer, RRT_TTB, rrt.tiretemp2);
+        loggerEmplaceU64(logBuffer, RRT_TTA, rrt.tiretemp1);
+        loggerEmplaceU64(logBuffer, RRT_TTB, rrt.tiretemp2);
 
         loggerEmplaceU16(logBuffer, RLW_AMB, rlw.ambTemp);
         loggerEmplaceU16(logBuffer, RLW_OBJ, rlw.objTemp);
         loggerEmplaceU16(logBuffer, RLW_RPM, rlw.rpm);
-        // loggerEmplaceU64(logBuffer, RLT_TTA, rlt.tiretemp1);
-        // loggerEmplaceU64(logBuffer, RLT_TTB, rlt.tiretemp2);
+        loggerEmplaceU64(logBuffer, RLT_TTA, rlt.tiretemp1);
+        loggerEmplaceU64(logBuffer, RLT_TTB, rlt.tiretemp2);
 
         // Report String Gauge Data
         loggerEmplaceU16(logBuffer, FR_SG, frsg);
@@ -479,10 +474,8 @@ void logBuffer_task(void *pvParamaters)
         //     ESP_LOGW(TAG, "Failed to write log buffer to SD card");
         // }
 
-        if (log_ring_write(log_ring, logBuffer) != 0)
-        {
-            if (log_flush_task_handle != NULL)
-            {
+        if (log_ring_write(log_ring, logBuffer) != 0){
+            if (log_flush_task_handle != NULL){
                 xTaskNotifyGive(log_flush_task_handle);
             }
         }
@@ -499,13 +492,11 @@ void logBuffer_task(void *pvParamaters)
     }
 }
 
-void app_main(void)
-{
+void app_main(void){
     esp_log_level_set("GNSS_DMA", ESP_LOG_DEBUG);
 
     log_ring = log_ring_create((size_t)CH_COUNT, (size_t)RING_CAP);
-    if (log_ring == NULL)
-    {
+    if (log_ring == NULL){
         ESP_LOGE(TAG, "Failed to create log ring buffer");
         return;
     }
@@ -519,8 +510,7 @@ void app_main(void)
     adc_init();
     can_init(process_can_message);
 
-    if (tasks_start_all() != ESP_OK)
-    {
+    if (tasks_start_all() != ESP_OK){
         ESP_LOGE(TAG, "Failed to start RTOS tasks");
         return;
     }
@@ -528,13 +518,12 @@ void app_main(void)
     // Show welcome message and help
     vTaskDelay(pdMS_TO_TICKS(500)); // Wait for tasks to start
     // Main loop - keep system alive
-    while (1)
-    {
-        printf("\033[2J\033[H");
-        printf("WFT CAN1: Fx: %d, Fy: %d, Fz:%d, Mz:%d\n", WFT_1.Fx_Force, WFT_1.Fy_Force, WFT_1.Fz_Force,WFT_1.Mx_Moment);
-        printf("WFT CAN2: My: %d, Mz: %d, Wheelspeed:%d, Position:%d\n", WFT_2.My_Moment, WFT_2.Mz_Moment, WFT_2.Wheelspeed,WFT_2.Position);
-        printf("WFT CAN3: X_Accel: %d, Y_Accel: %d, Z_Accel:%d\n", WFT_3.X_Acceleration, WFT_3.Y_Acceleration, WFT_3.Z_Acceleration);
-        printf("Slip: Ch1: %d, Ch2: %d, Ch3:%d, Ch4:%d, Ch5:%d, Ch6:%d\n", SLIP.POS1, SLIP.POS2, SLIP.POS3, SLIP.POS4, SLIP.POS5, SLIP.POS6);
+    while (1){
+        // printf("\033[2J\033[H");
+        // printf("WFT CAN1: Fx: %d, Fy: %d, Fz:%d, Mz:%d\n", WFT_1.Fx_Force, WFT_1.Fy_Force, WFT_1.Fz_Force,WFT_1.Mx_Moment);
+        // printf("WFT CAN2: My: %d, Mz: %d, Wheelspeed:%d, Position:%d\n", WFT_2.My_Moment, WFT_2.Mz_Moment, WFT_2.Wheelspeed,WFT_2.Position);
+        // printf("WFT CAN3: X_Accel: %d, Y_Accel: %d, Z_Accel:%d\n", WFT_3.X_Acceleration, WFT_3.Y_Acceleration, WFT_3.Z_Acceleration);
+        // printf("Slip: Ch1: %d, Ch2: %d, Ch3:%d, Ch4:%d, Ch5:%d, Ch6:%d\n", SLIP.POS1, SLIP.POS2, SLIP.POS3, SLIP.POS4, SLIP.POS5, SLIP.POS6);
         // printf("Tire Temp FRT: %lld%lld RRT: %lld%lld\n", frt.tiretemp1, frt.tiretemp2, rrt.tiretemp1, rrt.tiretemp2);
         vTaskDelay(pdMS_TO_TICKS(5000));
         // ESP_LOGI(TAG, "System heartbeat - Free heap: %ld bytes", esp_get_free_heap_size());
