@@ -287,7 +287,7 @@ static void process_can_message(twai_frame_t *message)
         break;
 
     default:
-        ESP_LOGI(TAG, "CAN Rx\tID: 0x%x\r\n", message->header.id);
+        // ESP_LOGI(TAG, "CAN Rx\tID: 0x%x\r\n", message->header.id);
         break;
     }
     // printf("Recived CAN message 0x%lX\n", message->header.id);

@@ -354,7 +354,7 @@ void uart_output_task(void *param) {
                 case 't':
                 case 'T':
                     printf("=== Display IMU Data ===\n");
-                    printf("IMU Accel -> X: %d\tY: %d\tZ: %d\n", imu_accel.x, imu_accel.y, imu_accel.z);
+                    printf("IMU Accel -> X: %.3f\tY: %.3f\tZ: %.3f\n", (float)((imu_accel.x* 0.122) / 1000), (float)((imu_accel.y* 0.122) / 1000), (float)((imu_accel.z* 0.122) / 1000));
                     printf("IMU Gyro  -> X: %d\tY: %d\tZ: %d\n", imu_gyro.x, imu_gyro.y, imu_gyro.z);
                     break;
                 case 'w':

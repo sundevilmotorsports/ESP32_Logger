@@ -34,28 +34,16 @@
     X(BATTERY1) \
     X(IMU_X_ACCEL) \
     X(IMU_X_ACCEL1) \
-    X(IMU_X_ACCEL2) \
-    X(IMU_X_ACCEL3) \
     X(IMU_Y_ACCEL) \
     X(IMU_Y_ACCEL1) \
-    X(IMU_Y_ACCEL2) \
-    X(IMU_Y_ACCEL3) \
     X(IMU_Z_ACCEL) \
     X(IMU_Z_ACCEL1) \
-    X(IMU_Z_ACCEL2) \
-    X(IMU_Z_ACCEL3) \
     X(IMU_X_GYRO) \
     X(IMU_X_GYRO1) \
-    X(IMU_X_GYRO2) \
-    X(IMU_X_GYRO3) \
     X(IMU_Y_GYRO) \
     X(IMU_Y_GYRO1) \
-    X(IMU_Y_GYRO2) \
-    X(IMU_Y_GYRO3) \
     X(IMU_Z_GYRO) \
     X(IMU_Z_GYRO1) \
-    X(IMU_Z_GYRO2) \
-    X(IMU_Z_GYRO3) \
     X(FR_SG) \
     X(FR_SG1) \
     X(FL_SG) \
