@@ -1,0 +1,3 @@
+[submodule "components/ModuleCore"]
+	path = components/ModuleCore
+	url = https://github.com/sundevilmotorsports/ModuleCore.git
