@@ -5,7 +5,27 @@
 
 Logger::Logger() {
     this->name_ = "tmp";
-    sd_.init();
+    // sd_.init();
+
+    this->register_can_device({
+        .id = 0x01,
+        .signals = {
+            { "0first",  0, 2 },
+            { "0second", 2, 2 },
+            { "0third",  4, 2 },
+            { "0fourth", 6, 2 },
+        }
+    });
+
+    this->register_can_device({
+        .id = 0x02,
+        .signals = {
+            { "1first",  0, 2 },
+            { "1second", 2, 2 },
+            { "1third",  4, 2 },
+            { "1fourth", 6, 2 },
+        }
+    });
 }
 
 
@@ -62,31 +82,41 @@ uint32_t Logger::extract(const uint8_t *data, uint8_t data_len, const SignalSlic
     return raw;
 }
 
+void Logger::log_sample() {
+    char   line[512];
+    size_t pos = snprintf(line, sizeof(line), "%llu",
+                          (unsigned long long)(esp_timer_get_time() / 1000));
+
+    for (auto &s : can_states_)
+        for (const auto &sig : s.def.signals)
+            pos += snprintf(line + pos, sizeof(line) - pos,
+                            ",%lu", (unsigned long)extract(s.data, s.data_len, sig));
+
+    for (auto &s : adc_states_) {
+        adc_oneshot_read(adc_handles_[s.def.unit], s.def.channel, &s.value);
+        pos += snprintf(line + pos, sizeof(line) - pos, ",%d", s.value);
+    }
+
+    line[pos++] = '\n';
+    write_log(line, pos);
+}
+
 std::expected<void, ModuleCoreError> Logger::main() {
     write_header();
 
-    char         line[512];
-    TickType_t   last_wake = xTaskGetTickCount();
-    const TickType_t period = pdMS_TO_TICKS(1000 / hz_);
+    esp_timer_handle_t timer;
+    esp_timer_create_args_t args = {
+        .callback = [](void *arg) {
+            static_cast<Logger*>(arg)->log_sample();
+        },
+        .arg = this,
+        .name = "logger"
+    };
+    esp_timer_create(&args, &timer);
+    esp_timer_start_periodic(timer, 1000000 / hz_);
 
     for (;;) {
-        size_t pos = snprintf(line, sizeof(line), "%llu",
-                              (unsigned long long)(esp_timer_get_time() / 1000));
-
-        for (auto &s : can_states_)
-            for (const auto &sig : s.def.signals)
-                pos += snprintf(line + pos, sizeof(line) - pos,
-                                ",%lu", (unsigned long)extract(s.data, s.data_len, sig));
-
-        for (auto &s : adc_states_) {
-            adc_oneshot_read(adc_handles_[s.def.unit], s.def.channel, &s.value);
-            pos += snprintf(line + pos, sizeof(line) - pos, ",%d", s.value);
-        }
-
-        line[pos++] = '\n';
-        write_log(line, pos);
-
-        vTaskDelayUntil(&last_wake, period);
+        vTaskDelay(pdMS_TO_TICKS(250));
     }
 
     return {};

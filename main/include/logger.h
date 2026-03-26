@@ -11,6 +11,7 @@
 #include "adc_device.h"
 #include "can_device.h"
 #include "sd.h"
+#include <iostream>
 
 class Logger {
 public:
@@ -25,7 +26,7 @@ public:
     std::expected<void, ModuleCoreError> main();
 
 private:
-    int hz_ = 250;
+    int hz_ = 25;
 
     std::string name_;
 
@@ -41,5 +42,10 @@ private:
 
     static uint32_t extract(const uint8_t *data, uint8_t data_len, const SignalSlice &sig);
 
-    void write_log(const char *buf, size_t len) { sd_.write(buf, len); }
+    void write_log(const char *buf, size_t len) {
+        /* sd_.write(buf, len); */
+        fwrite(buf, 1, len, stdout);
+    }
+
+    void log_sample();
 };

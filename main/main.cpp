@@ -1,6 +1,7 @@
 #include "esp_log.h"
 #include "module_core.h"
 #include "logger.h"
+#include "esp_random.h"
 
 using namespace std;
 
@@ -8,7 +9,7 @@ static const char *TAG = "main";
 
 #define BLINK_PIN   GPIO_NUM_2
 #define CAN_TX_PIN  GPIO_NUM_21
-#define CAN_RX_PIN  GPIO_NUM_22
+#define CAN_RX_PIN  GPIO_NUM_20
 
 #define MODULE_TYPE 0x01
 #define FW_VERSION  0x01
@@ -37,4 +38,16 @@ extern "C" void app_main() {
     cfg.app_main   = [&logger]() { return logger.main(); };
 
     ESP_ERROR_CHECK(g_module.init(info, cfg));
+
+    for (;;) {
+        for (uint8_t id : { 0x01, 0x02 }) {
+            CanFrame frame{};
+            frame.header.ide = 1;
+            frame.header.id  = build_arb_id(0x00, CMD_DATA, id);
+            frame.len        = 8;
+            for (auto &b : frame.data) b = esp_random() & 0xFF;
+            logger.on_can_frame(&frame);
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
 }
