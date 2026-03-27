@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "esp_system.h"
+#include "gnss.h"
 
 
 #define LOG_CHANNEL_NAMES
@@ -505,9 +506,13 @@ esp_err_t sdcard_create_numbered_log_file(const char *filename){
         return err;
     }
     
+    char gpsDate[17] = {0};
+    if(GNSS_Handle.fixType == 3){
+        snprintf(gpsDate, sizeof(gpsDate), "%d_%d_%d_%d_", GNSS_Handle.month, GNSS_Handle.day, GNSS_Handle.hour, GNSS_Handle.sec);
+    }
     // Create the new log filename
-    int written = snprintf(log_path, sizeof(log_path), "%s/%s%03d%s", 
-                          MOUNT_POINT, filename, testno, LOG_TYPE);
+    int written = snprintf(log_path, sizeof(log_path), "%s/%s%s%03d%s", 
+                          MOUNT_POINT, filename, gpsDate, testno, LOG_TYPE);
     
     // Check if the string was truncated
     if (written >= sizeof(log_path)) {
