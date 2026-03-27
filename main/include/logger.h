@@ -40,7 +40,7 @@ private:
 
     void ensure_adc_unit(adc_unit_t unit);
 
-    static uint32_t extract(const uint8_t *data, uint8_t data_len, const SignalSlice &sig);
+    uint64_t extract(const uint8_t *data, uint8_t data_len, const SignalSlice &sig);
 
     void write_log(const char *buf, size_t len) {
         /* sd_.write(buf, len); */

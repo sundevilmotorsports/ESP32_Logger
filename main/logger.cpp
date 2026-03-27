@@ -20,10 +20,7 @@ Logger::Logger() {
     this->register_can_device({
         .id = 0x02,
         .signals = {
-            { "1first",  0, 2 },
-            { "1second", 2, 2 },
-            { "1third",  4, 2 },
-            { "1fourth", 6, 2 },
+            { "large",  0, 8 },
         }
     });
 }
@@ -74,23 +71,25 @@ void Logger::ensure_adc_unit(adc_unit_t unit) {
     adc_oneshot_new_unit(&cfg, &adc_handles_[unit]);
 }
 
-uint32_t Logger::extract(const uint8_t *data, uint8_t data_len, const SignalSlice &sig) {
+// Maybe switch to a template, would need to implement way to define length of bytes to type
+uint64_t Logger::extract(const uint8_t *data, uint8_t data_len, const SignalSlice &sig) {
     if (sig.offset + sig.len > data_len) return 0;
-    uint32_t raw = 0;
+    uint64_t raw = 0;
     for (uint8_t i = 0; i < sig.len; i++)
-        raw |= (uint32_t)data[sig.offset + i] << (i * 8);
+        raw |= static_cast<uint64_t>(data[sig.offset + i]) << (i * 8);
     return raw;
 }
 
 void Logger::log_sample() {
     char   line[512];
     size_t pos = snprintf(line, sizeof(line), "%llu",
-                          (unsigned long long)(esp_timer_get_time() / 1000));
+                          static_cast<unsigned long long>(esp_timer_get_time() / 1000));
 
     for (auto &s : can_states_)
-        for (const auto &sig : s.def.signals)
+        for (const auto &sig : s.def.signals) {
             pos += snprintf(line + pos, sizeof(line) - pos,
-                            ",%lu", (unsigned long)extract(s.data, s.data_len, sig));
+                                ",%llu", extract(s.data, s.data_len, sig));
+        }
 
     for (auto &s : adc_states_) {
         adc_oneshot_read(adc_handles_[s.def.unit], s.def.channel, &s.value);
