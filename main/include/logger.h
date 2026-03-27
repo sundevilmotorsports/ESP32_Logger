@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstring>
 #include <vector>
+#include "esp_err.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_timer.h"
@@ -19,6 +20,7 @@ public:
 
     void register_can_device(CanDeviceDef def);
     void register_adc_device(AdcDeviceDef def);
+    esp_err_t init_adc(const AdcDevice::UnitConfig &config);
     void set_file_name(std::string name) { this->name_ = std::move(name); }
 
     void on_can_frame(const CanFrame *frame);
@@ -32,13 +34,14 @@ private:
 
     std::vector<CanDeviceState> can_states_;
     std::vector<AdcDeviceState> adc_states_;
-    adc_oneshot_unit_handle_t   adc_handles_[2] = {};
+    AdcDevice adc_device_;
+    bool adc_ready_ = false;
 
     SDCard sd_;
 
     void write_header();
 
-    void ensure_adc_unit(adc_unit_t unit);
+    esp_err_t apply_adc_channel_config(const AdcDeviceDef &def);
 
     uint64_t extract(const uint8_t *data, uint8_t data_len, const SignalSlice &sig);
 
