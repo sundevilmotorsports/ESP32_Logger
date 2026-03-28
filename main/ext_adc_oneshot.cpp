@@ -1,5 +1,6 @@
 #include "ext_adc_oneshot.h"
 
+#include <array>
 #include <memory>
 #include <new>
 
@@ -7,7 +8,7 @@ namespace {
 
 class ExtAdcOneShotUnit {
 public:
-    explicit ExtAdcOneShotUnit(ext_spi_adc_handle_t driver, uint8_t channel_count)
+    explicit ExtAdcOneShotUnit(ext_spi_adc_handle_t driver, std::uint8_t channel_count)
         : driver_(driver), channel_count_(channel_count) {}
 
     ~ExtAdcOneShotUnit() {
@@ -66,11 +67,10 @@ public:
         driver_ = nullptr;
         return ret;
     }
-
 private:
     ext_spi_adc_handle_t driver_ = nullptr;
-    uint8_t channel_count_ = 0;
-    bool configured_[EXT_SPI_ADC_MAX_CHANNELS] = {};
+    std::uint8_t channel_count_ = 0;
+    std::array<bool, EXT_SPI_ADC_MAX_CHANNELS> configured_ = {};
 };
 
 }  // namespace
@@ -78,8 +78,6 @@ private:
 struct ext_adc_oneshot_unit_t {
     std::unique_ptr<ExtAdcOneShotUnit> impl;
 };
-
-extern "C" {
 
 esp_err_t ext_adc_oneshot_new_unit(const ext_adc_oneshot_unit_init_cfg_t *init_config,
                                    ext_adc_oneshot_unit_handle_t *ret_unit) {
@@ -148,10 +146,9 @@ esp_err_t ext_adc_oneshot_del_unit(ext_adc_oneshot_unit_handle_t unit) {
     esp_err_t ret = ESP_OK;
     if (unit->impl) {
         ret = unit->impl->shutdown();
+        unit->impl.reset();
     }
 
     delete unit;
     return ret;
 }
-
-}  // extern "C"

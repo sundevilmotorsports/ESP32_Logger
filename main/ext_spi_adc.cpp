@@ -1,126 +1,54 @@
 #include "ext_spi_adc.h"
 
 #include <algorithm>
-#include <cstring>
+#include <array>
 #include <memory>
+#include <mutex>
 #include <new>
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
 
 namespace {
 
-class FreeRtosMutex {
-public:
-    FreeRtosMutex() : handle_(xSemaphoreCreateMutex()) {}
+using CommandBytes = std::array<std::uint8_t, 2>;
 
-    ~FreeRtosMutex() {
-        if (handle_ != nullptr) {
-            vSemaphoreDelete(handle_);
-        }
-    }
-
-    FreeRtosMutex(const FreeRtosMutex &) = delete;
-    FreeRtosMutex &operator=(const FreeRtosMutex &) = delete;
-
-    [[nodiscard]] bool valid() const {
-        return handle_ != nullptr;
-    }
-
-    [[nodiscard]] bool lock() const {
-        return handle_ != nullptr && xSemaphoreTake(handle_, portMAX_DELAY) == pdTRUE;
-    }
-
-    void unlock() const {
-        if (handle_ != nullptr) {
-            xSemaphoreGive(handle_);
-        }
-    }
-
-private:
-    SemaphoreHandle_t handle_ = nullptr;
-};
-
-class ScopedLock {
-public:
-    explicit ScopedLock(const FreeRtosMutex &mutex) : mutex_(mutex), locked_(mutex_.lock()) {}
-
-    ~ScopedLock() {
-        if (locked_) {
-            mutex_.unlock();
-        }
-    }
-
-    [[nodiscard]] bool locked() const {
-        return locked_;
-    }
-
-private:
-    const FreeRtosMutex &mutex_;
-    bool locked_ = false;
-};
-
-void make_default_command(const ext_spi_adc_protocol_config_t &protocol,
-                          ext_adc_channel_t channel,
-                          uint8_t out_command[2]) {
+CommandBytes make_default_command(const ext_spi_adc_protocol_config_t &protocol,
+                                  ext_adc_channel_t channel) {
     // Preserve the current device protocol: channel select lives in the first
     // byte, matching the legacy driver sequence of tx_data[0] = channel << 3.
-    out_command[0] = static_cast<uint8_t>(channel << protocol.channel_command_shift);
-    out_command[1] = 0;
+    return {
+        static_cast<std::uint8_t>(channel << protocol.channel_command_shift),
+        0,
+    };
+}
+
+CommandBytes make_custom_command(const ext_spi_adc_channel_config_t &config) {
+    return { config.tx_data[0], config.tx_data[1] };
 }
 
 class ExtSpiAdcDevice {
 public:
     explicit ExtSpiAdcDevice(ext_spi_adc_config_t config) : config_(config) {
-        if (config_.protocol.sample_mask == 0) {
-            config_.protocol.sample_mask = 0xFFFF;
-        }
-
-        for (uint8_t channel = 0; channel < EXT_SPI_ADC_MAX_CHANNELS; ++channel) {
-            make_default_command(config_.protocol, channel, channel_commands_[channel]);
-        }
+        normalize_config();
+        reset_channel_commands();
     }
 
     ~ExtSpiAdcDevice() {
         shutdown();
     }
 
-    esp_err_t init() {
-        if (!mutex_.valid()) {
-            return ESP_ERR_NO_MEM;
-        }
-
+    esp_err_t initialize() {
         esp_err_t ret = validate_config();
         if (ret != ESP_OK) {
             return ret;
         }
 
-        if (config_.bus.initialize_bus) {
-            spi_bus_config_t bus_cfg = {};
-            bus_cfg.mosi_io_num = config_.bus.mosi_io_num;
-            bus_cfg.miso_io_num = config_.bus.miso_io_num;
-            bus_cfg.sclk_io_num = config_.bus.sclk_io_num;
-            bus_cfg.quadwp_io_num = -1;
-            bus_cfg.quadhd_io_num = -1;
-            bus_cfg.max_transfer_sz = config_.bus.max_transfer_sz > 0 ? config_.bus.max_transfer_sz : 2;
-
-            ret = spi_bus_initialize(config_.bus.host_id, &bus_cfg, config_.bus.dma_chan);
-            if (ret != ESP_OK) {
-                return ret;
-            }
-
-            bus_initialized_ = true;
+        ret = initialize_bus_if_needed();
+        if (ret != ESP_OK) {
+            return ret;
         }
 
-        spi_device_interface_config_t dev_cfg = {};
-        dev_cfg.mode = config_.device.spi_mode;
-        dev_cfg.clock_speed_hz = config_.device.clock_speed_hz;
-        dev_cfg.spics_io_num = config_.device.cs_io_num;
-        dev_cfg.queue_size = config_.device.queue_size > 0 ? config_.device.queue_size : 1;
-
-        ret = spi_bus_add_device(config_.bus.host_id, &dev_cfg, &spi_handle_);
+        ret = add_spi_device();
         if (ret != ESP_OK) {
-            cleanup_bus();
+            free_bus_if_owned();
             return ret;
         }
 
@@ -128,25 +56,22 @@ public:
         return ESP_OK;
     }
 
-    esp_err_t config_channel(ext_adc_channel_t channel,
-                             const ext_spi_adc_channel_config_t *config) {
+    esp_err_t configure_channel(ext_adc_channel_t channel,
+                                const ext_spi_adc_channel_config_t *config) {
         if (!initialized_) {
             return ESP_ERR_INVALID_STATE;
         }
 
-        if (channel >= config_.protocol.channel_count) {
+        if (!is_valid_channel(channel)) {
             return ESP_ERR_INVALID_ARG;
         }
 
-        ScopedLock lock(mutex_);
-        if (!lock.locked()) {
-            return ESP_ERR_TIMEOUT;
-        }
+        std::lock_guard<std::mutex> lock(mutex_);
 
         if (config == nullptr) {
-            make_default_command(config_.protocol, channel, channel_commands_[channel]);
+            channel_commands_[channel] = make_default_command(config_.protocol, channel);
         } else {
-            memcpy(channel_commands_[channel], config->tx_data, sizeof(config->tx_data));
+            channel_commands_[channel] = make_custom_command(*config);
         }
 
         return ESP_OK;
@@ -157,7 +82,7 @@ public:
             return ESP_ERR_INVALID_ARG;
         }
 
-        if (channel >= config_.protocol.channel_count) {
+        if (!is_valid_channel(channel)) {
             return ESP_ERR_INVALID_ARG;
         }
 
@@ -165,13 +90,10 @@ public:
             return ESP_ERR_INVALID_STATE;
         }
 
-        ScopedLock lock(mutex_);
-        if (!lock.locked()) {
-            return ESP_ERR_TIMEOUT;
-        }
+        std::lock_guard<std::mutex> lock(mutex_);
 
         ext_spi_adc_frame_t frame = {};
-        esp_err_t ret = read_frame_locked(&frame);
+        esp_err_t ret = read_frame_locked(frame);
         if (ret != ESP_OK) {
             return ret;
         }
@@ -189,24 +111,22 @@ public:
             return ESP_ERR_INVALID_STATE;
         }
 
-        ScopedLock lock(mutex_);
-        if (!lock.locked()) {
-            return ESP_ERR_TIMEOUT;
-        }
+        std::lock_guard<std::mutex> lock(mutex_);
 
-        return read_frame_locked(out_frame);
+        return read_frame_locked(*out_frame);
     }
 
     esp_err_t shutdown() {
+        std::lock_guard<std::mutex> lock(mutex_);
+
         esp_err_t ret = ESP_OK;
 
         if (spi_handle_ != nullptr) {
-            ret = spi_bus_remove_device(spi_handle_);
-            spi_handle_ = nullptr;
+            ret = remove_spi_device();
         }
 
-        esp_err_t bus_ret = cleanup_bus();
-        if (ret == ESP_OK) {
+        esp_err_t bus_ret = free_bus_if_owned();
+        if (ret == ESP_OK && bus_ret != ESP_OK) {
             ret = bus_ret;
         }
 
@@ -215,6 +135,22 @@ public:
     }
 
 private:
+    void normalize_config() {
+        if (config_.protocol.sample_mask == 0) {
+            config_.protocol.sample_mask = 0xFFFF;
+        }
+    }
+
+    void reset_channel_commands() {
+        for (ext_adc_channel_t channel = 0; channel < EXT_SPI_ADC_MAX_CHANNELS; ++channel) {
+            channel_commands_[channel] = make_default_command(config_.protocol, channel);
+        }
+    }
+
+    [[nodiscard]] bool is_valid_channel(ext_adc_channel_t channel) const {
+        return channel < config_.protocol.channel_count;
+    }
+
     esp_err_t validate_config() const {
         if (config_.protocol.channel_count == 0 ||
             config_.protocol.channel_count > EXT_SPI_ADC_MAX_CHANNELS) {
@@ -240,27 +176,84 @@ private:
         return ESP_OK;
     }
 
-    esp_err_t read_frame_locked(ext_spi_adc_frame_t *out_frame) {
-        std::fill(std::begin(out_frame->values), std::end(out_frame->values), 0);
-        out_frame->channel_count = config_.protocol.channel_count;
+    esp_err_t initialize_bus_if_needed() {
+        if (!config_.bus.initialize_bus) {
+            return ESP_OK;
+        }
+
+        spi_bus_config_t bus_config = {};
+        bus_config.mosi_io_num = config_.bus.mosi_io_num;
+        bus_config.miso_io_num = config_.bus.miso_io_num;
+        bus_config.sclk_io_num = config_.bus.sclk_io_num;
+        bus_config.quadwp_io_num = -1;
+        bus_config.quadhd_io_num = -1;
+        bus_config.max_transfer_sz = config_.bus.max_transfer_sz > 0 ? config_.bus.max_transfer_sz : 2;
+
+        esp_err_t ret = spi_bus_initialize(config_.bus.host_id, &bus_config, config_.bus.dma_chan);
+        if (ret == ESP_OK) {
+            bus_initialized_ = true;
+        }
+
+        return ret;
+    }
+
+    esp_err_t add_spi_device() {
+        spi_device_interface_config_t device_config = {};
+        device_config.mode = config_.device.spi_mode;
+        device_config.clock_speed_hz = config_.device.clock_speed_hz;
+        device_config.spics_io_num = config_.device.cs_io_num;
+        device_config.queue_size = config_.device.queue_size > 0 ? config_.device.queue_size : 1;
+
+        return spi_bus_add_device(config_.bus.host_id, &device_config, &spi_handle_);
+    }
+
+    esp_err_t remove_spi_device() {
+        if (spi_handle_ == nullptr) {
+            return ESP_OK;
+        }
+
+        esp_err_t ret = spi_bus_remove_device(spi_handle_);
+        if (ret == ESP_OK) {
+            spi_handle_ = nullptr;
+        }
+
+        return ret;
+    }
+
+    esp_err_t free_bus_if_owned() {
+        if (!bus_initialized_) {
+            return ESP_OK;
+        }
+
+        esp_err_t ret = spi_bus_free(config_.bus.host_id);
+        if (ret == ESP_OK) {
+            bus_initialized_ = false;
+        }
+
+        return ret;
+    }
+
+    esp_err_t read_frame_locked(ext_spi_adc_frame_t &out_frame) {
+        std::fill(std::begin(out_frame.values), std::end(out_frame.values), 0);
+        out_frame.channel_count = config_.protocol.channel_count;
 
         // The current ADC behaves like a pipelined SAR: each transfer selects the
         // next channel while the returned word belongs to the previous selection.
         // Preserve correctness by always reading a full frame and using a final
         // flush transfer to capture the last channel.
-        uint16_t raw_sample = 0;
+        std::uint16_t raw_sample = 0;
         esp_err_t ret = transmit_command(channel_commands_[0], &raw_sample);
         if (ret != ESP_OK) {
             return ret;
         }
 
-        for (uint8_t channel = 1; channel < config_.protocol.channel_count; ++channel) {
+        for (ext_adc_channel_t channel = 1; channel < config_.protocol.channel_count; ++channel) {
             ret = transmit_command(channel_commands_[channel], &raw_sample);
             if (ret != ESP_OK) {
                 return ret;
             }
 
-            out_frame->values[channel - 1] = raw_sample;
+            out_frame.values[channel - 1] = raw_sample;
         }
 
         ret = transmit_command(channel_commands_[0], &raw_sample);
@@ -268,22 +261,18 @@ private:
             return ret;
         }
 
-        out_frame->values[config_.protocol.channel_count - 1] = raw_sample;
+        out_frame.values[config_.protocol.channel_count - 1] = raw_sample;
         return ESP_OK;
     }
 
-    esp_err_t transmit_command(const uint8_t command[2], uint16_t *out_sample) {
-        uint8_t tx_data[2] = {
-            command[0],
-            command[1],
-        };
-        uint8_t rx_data[2] = {};
+    esp_err_t transmit_command(const CommandBytes &command, std::uint16_t *out_sample) {
+        CommandBytes rx_data = {};
 
         spi_transaction_t transaction = {};
         transaction.length = 16;
         transaction.rxlength = 16;
-        transaction.tx_buffer = tx_data;
-        transaction.rx_buffer = rx_data;
+        transaction.tx_buffer = command.data();
+        transaction.rx_buffer = rx_data.data();
 
         esp_err_t ret = spi_device_transmit(spi_handle_, &transaction);
         if (ret != ESP_OK) {
@@ -297,30 +286,17 @@ private:
         return ESP_OK;
     }
 
-    uint16_t decode_sample(const uint8_t rx_data[2]) const {
-        uint16_t sample = (static_cast<uint16_t>(rx_data[0]) << 8) | rx_data[1];
+    std::uint16_t decode_sample(const CommandBytes &rx_data) const {
+        std::uint16_t sample = (static_cast<std::uint16_t>(rx_data[0]) << 8) | rx_data[1];
         return sample & config_.protocol.sample_mask;
     }
 
-    esp_err_t cleanup_bus() {
-        if (!bus_initialized_) {
-            return ESP_OK;
-        }
-
-        esp_err_t ret = spi_bus_free(config_.bus.host_id);
-        if (ret == ESP_OK) {
-            bus_initialized_ = false;
-        }
-
-        return ret;
-    }
-
     ext_spi_adc_config_t config_;
-    FreeRtosMutex mutex_;
+    std::mutex mutex_;
     spi_device_handle_t spi_handle_ = nullptr;
     bool bus_initialized_ = false;
     bool initialized_ = false;
-    uint8_t channel_commands_[EXT_SPI_ADC_MAX_CHANNELS][2] = {};
+    std::array<CommandBytes, EXT_SPI_ADC_MAX_CHANNELS> channel_commands_{};
 };
 
 }  // namespace
@@ -328,8 +304,6 @@ private:
 struct ext_spi_adc_t {
     std::unique_ptr<ExtSpiAdcDevice> impl;
 };
-
-extern "C" {
 
 esp_err_t ext_spi_adc_new(const ext_spi_adc_config_t *config, ext_spi_adc_handle_t *ret_handle) {
     if (config == nullptr || ret_handle == nullptr) {
@@ -347,7 +321,7 @@ esp_err_t ext_spi_adc_new(const ext_spi_adc_config_t *config, ext_spi_adc_handle
         return ESP_ERR_NO_MEM;
     }
 
-    esp_err_t ret = handle->impl->init();
+    esp_err_t ret = handle->impl->initialize();
     if (ret != ESP_OK) {
         delete handle;
         return ret;
@@ -364,7 +338,7 @@ esp_err_t ext_spi_adc_config_channel(ext_spi_adc_handle_t handle,
         return ESP_ERR_INVALID_ARG;
     }
 
-    return handle->impl->config_channel(channel, config);
+    return handle->impl->configure_channel(channel, config);
 }
 
 esp_err_t ext_spi_adc_read_channel(ext_spi_adc_handle_t handle,
@@ -393,10 +367,9 @@ esp_err_t ext_spi_adc_del(ext_spi_adc_handle_t handle) {
     esp_err_t ret = ESP_OK;
     if (handle->impl) {
         ret = handle->impl->shutdown();
+        handle->impl.reset();
     }
 
     delete handle;
     return ret;
 }
-
-}  // extern "C"

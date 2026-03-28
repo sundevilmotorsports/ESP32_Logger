@@ -2,20 +2,17 @@
 
 #include "ext_spi_adc.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+struct ext_adc_oneshot_unit_t;
+using ext_adc_oneshot_unit_handle_t = ext_adc_oneshot_unit_t *;
 
-typedef struct ext_adc_oneshot_unit_t *ext_adc_oneshot_unit_handle_t;
-
-typedef struct {
+struct ext_adc_oneshot_unit_init_cfg_t {
     ext_spi_adc_config_t driver_config;
-} ext_adc_oneshot_unit_init_cfg_t;
+};
 
-typedef struct {
+struct ext_adc_oneshot_chan_cfg_t {
     // Raw 16-bit SPI frame in transmit order: tx_data[0] is shifted out first.
-    uint8_t tx_data[2];
-} ext_adc_oneshot_chan_cfg_t;
+    std::uint8_t tx_data[2];
+};
 
 esp_err_t ext_adc_oneshot_new_unit(const ext_adc_oneshot_unit_init_cfg_t *init_config,
                                    ext_adc_oneshot_unit_handle_t *ret_unit);
@@ -28,7 +25,3 @@ esp_err_t ext_adc_oneshot_read(ext_adc_oneshot_unit_handle_t unit,
 esp_err_t ext_adc_oneshot_read_frame(ext_adc_oneshot_unit_handle_t unit,
                                      ext_spi_adc_frame_t *out_frame);
 esp_err_t ext_adc_oneshot_del_unit(ext_adc_oneshot_unit_handle_t unit);
-
-#ifdef __cplusplus
-}
-#endif
