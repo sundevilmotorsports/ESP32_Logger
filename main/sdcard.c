@@ -221,7 +221,7 @@ esp_err_t nvs_set_log_name(const char *log_name) {
     return ESP_OK;
 }
 
-esp_err_t nvs_get_testno(uint8_t *testno) {
+esp_err_t nvs_get_testno(uint16_t *testno) {
     if (testno == NULL) {
         ESP_LOGE(TAG, "testno pointer is NULL");
         return ESP_ERR_INVALID_ARG;
@@ -232,7 +232,7 @@ esp_err_t nvs_get_testno(uint8_t *testno) {
         return ESP_ERR_INVALID_STATE;
     }
     
-    esp_err_t err = nvs_get_u8(hnvs, "testno", testno);
+    esp_err_t err = nvs_get_u16(hnvs, "testno", testno);
     
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to read testno from NVS: %s", esp_err_to_name(err));
@@ -242,7 +242,7 @@ esp_err_t nvs_get_testno(uint8_t *testno) {
     return err;
 }
 
-esp_err_t nvs_increment_testno(uint8_t *testno){
+esp_err_t nvs_increment_testno(uint16_t *testno){
     if(hnvs == 0){
         ESP_LOGE(TAG, "NVS handle not initialized");
         return ESP_ERR_INVALID_STATE;
@@ -259,7 +259,7 @@ esp_err_t nvs_increment_testno(uint8_t *testno){
     *testno = (*testno == 255) ? 0 : *testno + 1;
     
     // Write and commit
-    err = nvs_set_u8(hnvs, "testno", *testno);
+    err = nvs_set_u16(hnvs, "testno", *testno);
     if(err == ESP_OK) {
         err = nvs_commit(hnvs);
     }
@@ -273,14 +273,14 @@ esp_err_t nvs_increment_testno(uint8_t *testno){
     return err;
 }
 
-esp_err_t nvs_set_testno(uint8_t testno){
+esp_err_t nvs_set_testno(uint16_t testno){
     if(hnvs == 0){
         ESP_LOGE(TAG, "NVS handle not initialized");
         return ESP_ERR_INVALID_STATE;
     }
 
     // Write and commit
-    esp_err_t err = nvs_set_u8(hnvs, "testno", testno);
+    esp_err_t err = nvs_set_u16(hnvs, "testno", testno);
     if(err == ESP_OK) {
         err = nvs_commit(hnvs);
     }

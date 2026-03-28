@@ -132,21 +132,21 @@ esp_err_t nvs_get_log_name(char *buffer, size_t buffer_size);
  * @param testno Pointer to store retrieved test number
  * @return ESP_OK on success, error code on failure
  */
-esp_err_t nvs_get_testno(uint8_t *testno);
+esp_err_t nvs_get_testno(uint16_t *testno);
 
 /**
  * @brief Set test number in NVS
  * @param testno Test number to store
  * @return ESP_OK on success, error code on failure
  */
-esp_err_t nvs_set_testno(uint8_t testno);
+esp_err_t nvs_set_testno(uint16_t testno);
 
 /**
  * @brief Increment test number in NVS (with rollover at 255)
  * @param testno Pointer to store new test number
  * @return ESP_OK on success, error code on failure
  */
-esp_err_t nvs_increment_testno(uint8_t *testno);
+esp_err_t nvs_increment_testno(uint16_t *testno);
 
 // ============================================================================
 // UTILITY FUNCTIONS (INTERNAL - NOT FOR EXTERNAL USE)
