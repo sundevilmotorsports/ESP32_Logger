@@ -497,7 +497,7 @@ esp_err_t sdcard_create_numbered_log_file(const char *filename){
     
     // Create internal buffer of adequate size
     char log_path[MAX_FILE_NAME_LENGTH];
-    uint8_t testno = 0;
+    uint16_t testno = 0;
     
     // Increment the test number to get a NEW number
     err = nvs_increment_testno(&testno);
