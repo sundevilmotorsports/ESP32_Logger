@@ -1,14 +1,15 @@
 #pragma once
 
-#include "esp_adc/adc_oneshot.h"
+#include <cstdint>
 
 struct AdcDeviceDef {
-    const char    *name;
-    adc_channel_t  channel;
-    adc_unit_t     unit;
+    const char *name = nullptr;
+    std::uint8_t channel = 0;
+    int command_msb = -1;
+    std::uint8_t command_lsb = 0;
 };
 
 struct AdcDeviceState {
     AdcDeviceDef def;
-    int          value = 0;
+    int value = 0;
 };

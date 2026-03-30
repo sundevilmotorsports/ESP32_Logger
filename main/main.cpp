@@ -39,6 +39,41 @@ extern "C" void app_main() {
 
     ESP_ERROR_CHECK(g_module.init(info, cfg));
 
+    // Example application-level ADC registration. These channels will appear in
+    // the logger CSV header and will be sampled by Logger::log_sample().
+    logger.register_adc_device({
+        .name = "adc_ch0",
+        .channel = 0,
+    });
+    logger.register_adc_device({
+        .name = "adc_ch6",
+        .channel = 6,
+    });
+
+    AdcDriver::Config adc_cfg = {
+        .bus = {
+            .host_id = SPI3_HOST,
+            .dma_chan = SPI_DMA_CH_AUTO,
+            .sclk_io_num = GPIO_NUM_5,
+            .mosi_io_num = GPIO_NUM_7,
+            .miso_io_num = GPIO_NUM_6,
+            .max_transfer_sz = 4092,
+            .initialize_bus = true,
+        },
+        .device = {
+            .cs_io_num = GPIO_NUM_4,
+            .clock_speed_hz = SPI_MASTER_FREQ_10M,
+            .spi_mode = 3,
+            .queue_size = 10,
+        },
+        .protocol = {
+            .channel_count = 8, // 8 Available channels on the current ADC
+            .channel_command_shift = 3, // Command Bits start on Bit 3
+            .sample_mask = 0x0FFF, // For our ADC first 4 bits are 0 anws but this masks them to be 0 regardless of ADC output
+        },
+    };
+    ESP_ERROR_CHECK(logger.init_adc(adc_cfg));
+
     for (;;) {
         for (uint8_t id : { 0x01, 0x02 }) {
             CanFrame frame{};
@@ -48,6 +83,7 @@ extern "C" void app_main() {
             for (auto &b : frame.data) b = esp_random() & 0xFF;
             logger.on_can_frame(&frame);
         }
+        
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }

@@ -120,3 +120,4 @@ coverage.xml
 
 # ESP-IDF Python environment (if stored locally)
 .espressif/
+sdkconfig

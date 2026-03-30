@@ -40,13 +40,17 @@ void Logger::register_can_device(CanDeviceDef def) {
 }
 
 void Logger::register_adc_device(AdcDeviceDef def) {
-    ensure_adc_unit(def.unit);
-    adc_oneshot_chan_cfg_t cfg = {
-        .atten    = ADC_ATTEN_DB_12,
-        .bitwidth = ADC_BITWIDTH_DEFAULT,
-    };
-    adc_oneshot_config_channel(adc_handles_[def.unit], def.channel, &cfg);
     adc_states_.push_back({ .def = def });
+
+    if (!adc_ready_) {
+        return;
+    }
+
+    esp_err_t ret = apply_adc_channel_config(adc_states_.back().def);
+    if (ret != ESP_OK) {
+        ModuleCoreLogger::error("Failed to configure ADC channel %u: %s",
+                                static_cast<unsigned>(def.channel), esp_err_to_name(ret));
+    }
 }
 
 void Logger::on_can_frame(const CanFrame *frame) {
@@ -74,10 +78,44 @@ void Logger::write_header() {
     write_log(line, pos);
 }
 
-void Logger::ensure_adc_unit(adc_unit_t unit) {
-    if (adc_handles_[unit]) return;
-    adc_oneshot_unit_init_cfg_t cfg = { .unit_id = unit };
-    adc_oneshot_new_unit(&cfg, &adc_handles_[unit]);
+esp_err_t Logger::init_adc(const AdcDriver::Config &config) {
+    if (adc_ready_) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    esp_err_t ret = adc_driver_.init(config);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    for (const auto &state : adc_states_) {
+        ret = apply_adc_channel_config(state.def);
+        if (ret != ESP_OK) {
+            adc_driver_.deinit();
+            return ret;
+        }
+    }
+
+    adc_ready_ = true;
+    return ESP_OK;
+}
+
+esp_err_t Logger::apply_adc_channel_config(const AdcDeviceDef &def) {
+    if (!adc_driver_.initialized()) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (def.command_msb < 0) {
+        return adc_driver_.config_channel(def.channel);
+    }
+
+    AdcDriver::ChannelConfig config = {
+        .tx_data = {
+            static_cast<std::uint8_t>(def.command_msb),
+            def.command_lsb,
+        },
+    };
+    return adc_driver_.config_channel(def.channel, config);
 }
 
 // Maybe switch to a template, would need to implement way to define length of bytes to type
@@ -101,7 +139,14 @@ void Logger::log_sample() {
         }
 
     for (auto &s : adc_states_) {
-        adc_oneshot_read(adc_handles_[s.def.unit], s.def.channel, &s.value);
+        if (adc_ready_) {
+            esp_err_t ret = adc_driver_.read(s.def.channel, &s.value);
+            if (ret != ESP_OK) {
+                ModuleCoreLogger::error("ADC read failed for channel %u: %s",
+                                        static_cast<unsigned>(s.def.channel), esp_err_to_name(ret));
+                s.value = 0;
+            }
+        }
         pos += snprintf(line + pos, sizeof(line) - pos, ",%d", s.value);
     }
 
@@ -118,7 +163,9 @@ std::expected<void, ModuleCoreError> Logger::main() {
             static_cast<Logger*>(arg)->log_sample();
         },
         .arg = this,
-        .name = "logger"
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "logger",
+        .skip_unhandled_events = false,
     };
     esp_timer_create(&args, &timer);
     esp_timer_start_periodic(timer, 1000000 / hz_);

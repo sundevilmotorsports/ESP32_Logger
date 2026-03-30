@@ -4,10 +4,12 @@
 #include <cstdio>
 #include <cstring>
 #include <vector>
+#include "esp_err.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_timer.h"
 #include "module_core.h"
+#include "adc_driver.h"
 #include "adc_device.h"
 #include "can_device.h"
 #include "sd.h"
@@ -20,6 +22,7 @@ public:
 
     void register_can_device(CanDeviceDef def);
     void register_adc_device(AdcDeviceDef def);
+    esp_err_t init_adc(const AdcDriver::Config &config);
     void set_file_name(std::string name) { this->name_ = std::move(name); }
 
     void on_can_frame(const CanFrame *frame);
@@ -33,7 +36,8 @@ private:
 
     std::vector<CanDeviceState> can_states_;
     std::vector<AdcDeviceState> adc_states_;
-    adc_oneshot_unit_handle_t   adc_handles_[2] = {};
+    AdcDriver adc_driver_;
+    bool adc_ready_ = false;
 
     GNSS& gnss_;
 
@@ -41,7 +45,7 @@ private:
 
     void write_header();
 
-    void ensure_adc_unit(adc_unit_t unit);
+    esp_err_t apply_adc_channel_config(const AdcDeviceDef &def);
 
     uint64_t extract(const uint8_t *data, uint8_t data_len, const SignalSlice &sig);
 
