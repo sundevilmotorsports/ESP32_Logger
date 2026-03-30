@@ -1,20 +1,21 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
 #include "esp_err.h"
 
-inline constexpr std::size_t EXT_SPI_ADC_MAX_CHANNELS = 8;
+namespace ext::spi_adc {
 
-using ext_adc_channel_t = std::uint8_t;
+inline constexpr std::size_t kMaxChannels = 8;
 
-struct ext_spi_adc_t;
-using ext_spi_adc_handle_t = ext_spi_adc_t *;
+using Channel = std::uint8_t;
 
-struct ext_spi_adc_bus_config_t {
+struct BusConfig {
     spi_host_device_t host_id;
     spi_dma_chan_t dma_chan;
     gpio_num_t sclk_io_num;
@@ -24,14 +25,14 @@ struct ext_spi_adc_bus_config_t {
     bool initialize_bus;
 };
 
-struct ext_spi_adc_device_config_t {
+struct DeviceConfig {
     gpio_num_t cs_io_num;
     int clock_speed_hz;
     std::uint8_t spi_mode;
     int queue_size;
 };
 
-struct ext_spi_adc_protocol_config_t {
+struct ProtocolConfig {
     std::uint8_t channel_count;
     // For the current ADC, the logical channel select bits live in the first
     // transmitted byte and the second byte is zero by default.
@@ -39,28 +40,45 @@ struct ext_spi_adc_protocol_config_t {
     std::uint16_t sample_mask;
 };
 
-struct ext_spi_adc_config_t {
-    ext_spi_adc_bus_config_t bus;
-    ext_spi_adc_device_config_t device;
-    ext_spi_adc_protocol_config_t protocol;
+struct Config {
+    BusConfig bus;
+    DeviceConfig device;
+    ProtocolConfig protocol;
 };
 
-struct ext_spi_adc_channel_config_t {
+struct ChannelConfig {
     // Raw 16-bit SPI frame in transmit order: tx_data[0] is shifted out first.
-    std::uint8_t tx_data[2];
+    std::array<std::uint8_t, 2> tx_data{};
 };
 
-struct ext_spi_adc_frame_t {
-    std::uint8_t channel_count;
-    std::uint16_t values[EXT_SPI_ADC_MAX_CHANNELS];
+struct Frame {
+    std::uint8_t channel_count = 0;
+    std::array<std::uint16_t, kMaxChannels> values{};
 };
 
-esp_err_t ext_spi_adc_new(const ext_spi_adc_config_t *config, ext_spi_adc_handle_t *ret_handle);
-esp_err_t ext_spi_adc_config_channel(ext_spi_adc_handle_t handle,
-                                     ext_adc_channel_t channel,
-                                     const ext_spi_adc_channel_config_t *config);
-esp_err_t ext_spi_adc_read_channel(ext_spi_adc_handle_t handle,
-                                   ext_adc_channel_t channel,
-                                   int *out_raw);
-esp_err_t ext_spi_adc_read_frame(ext_spi_adc_handle_t handle, ext_spi_adc_frame_t *out_frame);
-esp_err_t ext_spi_adc_del(ext_spi_adc_handle_t handle);
+class Driver {
+public:
+    Driver();
+    ~Driver();
+
+    Driver(const Driver &) = delete;
+    Driver &operator=(const Driver &) = delete;
+
+    Driver(Driver &&) noexcept;
+    Driver &operator=(Driver &&) noexcept;
+
+    esp_err_t initialize(const Config &config);
+    esp_err_t config_channel(Channel channel);
+    esp_err_t config_channel(Channel channel, const ChannelConfig &config);
+    esp_err_t read(Channel channel, int *out_raw) const;
+    esp_err_t read_frame(Frame *out_frame) const;
+    esp_err_t shutdown();
+
+    [[nodiscard]] bool initialized() const { return impl_ != nullptr; }
+
+private:
+    class Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
+}  // namespace ext::spi_adc

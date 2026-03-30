@@ -66,6 +66,8 @@ private:
             .format_if_mount_failed = false,
             .max_files              = 4,
             .allocation_unit_size   = 16 * 1024,
+            .disk_status_check_enable = false,
+            .use_one_fat            = false,
         };
 
         return esp_vfs_fat_sdmmc_mount(MOUNT_POINT, &host, &slot, &mount, &card_);

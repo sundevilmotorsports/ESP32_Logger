@@ -1,27 +1,43 @@
 #pragma once
 
+#include <array>
+#include <cstdint>
 #include "ext_spi_adc.h"
 
-struct ext_adc_oneshot_unit_t;
-using ext_adc_oneshot_unit_handle_t = ext_adc_oneshot_unit_t *;
+namespace ext::adc_oneshot {
 
-struct ext_adc_oneshot_unit_init_cfg_t {
-    ext_spi_adc_config_t driver_config;
+using Channel = spi_adc::Channel;
+using ChannelConfig = spi_adc::ChannelConfig;
+using Frame = spi_adc::Frame;
+
+struct UnitConfig {
+    spi_adc::Config driver_config;
 };
 
-struct ext_adc_oneshot_chan_cfg_t {
-    // Raw 16-bit SPI frame in transmit order: tx_data[0] is shifted out first.
-    std::uint8_t tx_data[2];
+class Unit {
+public:
+    Unit() = default;
+    ~Unit() = default;
+
+    Unit(const Unit &) = delete;
+    Unit &operator=(const Unit &) = delete;
+
+    Unit(Unit &&) noexcept;
+    Unit &operator=(Unit &&) noexcept;
+
+    esp_err_t initialize(const UnitConfig &config);
+    esp_err_t config_channel(Channel channel);
+    esp_err_t config_channel(Channel channel, const ChannelConfig &config);
+    esp_err_t read(Channel channel, int *out_raw) const;
+    esp_err_t read_frame(Frame *out_frame) const;
+    esp_err_t shutdown();
+
+    [[nodiscard]] bool initialized() const { return driver_.initialized(); }
+
+private:
+    spi_adc::Driver driver_;
+    std::uint8_t channel_count_ = 0;
+    std::array<bool, spi_adc::kMaxChannels> configured_{};
 };
 
-esp_err_t ext_adc_oneshot_new_unit(const ext_adc_oneshot_unit_init_cfg_t *init_config,
-                                   ext_adc_oneshot_unit_handle_t *ret_unit);
-esp_err_t ext_adc_oneshot_config_channel(ext_adc_oneshot_unit_handle_t unit,
-                                         ext_adc_channel_t channel,
-                                         const ext_adc_oneshot_chan_cfg_t *config);
-esp_err_t ext_adc_oneshot_read(ext_adc_oneshot_unit_handle_t unit,
-                               ext_adc_channel_t channel,
-                               int *out_raw);
-esp_err_t ext_adc_oneshot_read_frame(ext_adc_oneshot_unit_handle_t unit,
-                                     ext_spi_adc_frame_t *out_frame);
-esp_err_t ext_adc_oneshot_del_unit(ext_adc_oneshot_unit_handle_t unit);
+}  // namespace ext::adc_oneshot

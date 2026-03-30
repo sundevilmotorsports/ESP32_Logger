@@ -104,7 +104,7 @@ esp_err_t Logger::apply_adc_channel_config(const AdcDeviceDef &def) {
 
     AdcDevice::ChannelConfig config = {
         .tx_data = {
-            static_cast<uint8_t>(def.command_msb),
+            static_cast<std::uint8_t>(def.command_msb),
             def.command_lsb,
         },
     };
@@ -156,7 +156,9 @@ std::expected<void, ModuleCoreError> Logger::main() {
             static_cast<Logger*>(arg)->log_sample();
         },
         .arg = this,
-        .name = "logger"
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "logger",
+        .skip_unhandled_events = false,
     };
     esp_timer_create(&args, &timer);
     esp_timer_start_periodic(timer, 1000000 / hz_);

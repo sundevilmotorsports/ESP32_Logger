@@ -1,13 +1,15 @@
 #pragma once
 
+#include <cstdint>
+
 #include "ext_adc_oneshot.h"
 
 class AdcDevice {
 public:
-    using Channel = ext_adc_channel_t;
-    using UnitConfig = ext_adc_oneshot_unit_init_cfg_t;
-    using ChannelConfig = ext_adc_oneshot_chan_cfg_t;
-    using Frame = ext_spi_adc_frame_t;
+    using Channel = ext::adc_oneshot::Channel;
+    using UnitConfig = ext::adc_oneshot::UnitConfig;
+    using ChannelConfig = ext::adc_oneshot::ChannelConfig;
+    using Frame = ext::adc_oneshot::Frame;
 
     AdcDevice() = default;
     ~AdcDevice();
@@ -25,18 +27,17 @@ public:
     esp_err_t read_frame(Frame *out_frame) const;
     esp_err_t deinit();
 
-    [[nodiscard]] bool initialized() const { return handle_ != nullptr; }
-    [[nodiscard]] ext_adc_oneshot_unit_handle_t handle() const { return handle_; }
+    [[nodiscard]] bool initialized() const { return unit_.initialized(); }
 
 private:
-    ext_adc_oneshot_unit_handle_t handle_ = nullptr;
+    ext::adc_oneshot::Unit unit_;
 };
 
 struct AdcDeviceDef {
     const char *name = nullptr;
     AdcDevice::Channel channel = 0;
     int command_msb = -1;
-    uint8_t command_lsb = 0;
+    std::uint8_t command_lsb = 0;
 };
 
 struct AdcDeviceState {
