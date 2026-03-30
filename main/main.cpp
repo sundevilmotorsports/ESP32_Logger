@@ -50,28 +50,26 @@ extern "C" void app_main() {
         .channel = 6,
     });
 
-    AdcDevice::UnitConfig adc_cfg = {
-        .driver_config = {
-            .bus = {
-                .host_id = SPI3_HOST,
-                .dma_chan = SPI_DMA_CH_AUTO,
-                .sclk_io_num = GPIO_NUM_5,
-                .mosi_io_num = GPIO_NUM_7,
-                .miso_io_num = GPIO_NUM_6,
-                .max_transfer_sz = 4092,
-                .initialize_bus = true,
-            },
-            .device = {
-                .cs_io_num = GPIO_NUM_4,
-                .clock_speed_hz = SPI_MASTER_FREQ_10M,
-                .spi_mode = 3,
-                .queue_size = 10,
-            },
-            .protocol = {
-                .channel_count = 8,
-                .channel_command_shift = 3,
-                .sample_mask = 0x0FFF,
-            },
+    AdcDriver::Config adc_cfg = {
+        .bus = {
+            .host_id = SPI3_HOST,
+            .dma_chan = SPI_DMA_CH_AUTO,
+            .sclk_io_num = GPIO_NUM_5,
+            .mosi_io_num = GPIO_NUM_7,
+            .miso_io_num = GPIO_NUM_6,
+            .max_transfer_sz = 4092,
+            .initialize_bus = true,
+        },
+        .device = {
+            .cs_io_num = GPIO_NUM_4,
+            .clock_speed_hz = SPI_MASTER_FREQ_10M,
+            .spi_mode = 3,
+            .queue_size = 10,
+        },
+        .protocol = {
+            .channel_count = 8, // 8 Available channels on the current ADC
+            .channel_command_shift = 3, // Command Bits start on Bit 3
+            .sample_mask = 0x0FFF, // For our ADC first 4 bits are 0 anws but this masks them to be 0 regardless of ADC output
         },
     };
     ESP_ERROR_CHECK(logger.init_adc(adc_cfg));

@@ -1,4 +1,4 @@
-idf_component_register(SRCS "main.cpp" "logger.cpp" "adc_device.cpp" "ext_adc_oneshot.cpp" "ext_spi_adc.cpp"
+idf_component_register(SRCS "adc_driver.cpp" "main.cpp" "logger.cpp"
                     INCLUDE_DIRS "." "include"
                     REQUIRES ModuleCore driver esp_timer fatfs)
 

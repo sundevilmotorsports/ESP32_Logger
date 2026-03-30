@@ -9,6 +9,7 @@
 #include "freertos/task.h"
 #include "esp_timer.h"
 #include "module_core.h"
+#include "adc_driver.h"
 #include "adc_device.h"
 #include "can_device.h"
 #include "sd.h"
@@ -20,7 +21,7 @@ public:
 
     void register_can_device(CanDeviceDef def);
     void register_adc_device(AdcDeviceDef def);
-    esp_err_t init_adc(const AdcDevice::UnitConfig &config);
+    esp_err_t init_adc(const AdcDriver::Config &config);
     void set_file_name(std::string name) { this->name_ = std::move(name); }
 
     void on_can_frame(const CanFrame *frame);
@@ -34,7 +35,7 @@ private:
 
     std::vector<CanDeviceState> can_states_;
     std::vector<AdcDeviceState> adc_states_;
-    AdcDevice adc_device_;
+    AdcDriver adc_driver_;
     bool adc_ready_ = false;
 
     SDCard sd_;

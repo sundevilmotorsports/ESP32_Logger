@@ -71,12 +71,12 @@ void Logger::write_header() {
     write_log(line, pos);
 }
 
-esp_err_t Logger::init_adc(const AdcDevice::UnitConfig &config) {
+esp_err_t Logger::init_adc(const AdcDriver::Config &config) {
     if (adc_ready_) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    esp_err_t ret = adc_device_.init(config);
+    esp_err_t ret = adc_driver_.init(config);
     if (ret != ESP_OK) {
         return ret;
     }
@@ -84,7 +84,7 @@ esp_err_t Logger::init_adc(const AdcDevice::UnitConfig &config) {
     for (const auto &state : adc_states_) {
         ret = apply_adc_channel_config(state.def);
         if (ret != ESP_OK) {
-            adc_device_.deinit();
+            adc_driver_.deinit();
             return ret;
         }
     }
@@ -94,21 +94,21 @@ esp_err_t Logger::init_adc(const AdcDevice::UnitConfig &config) {
 }
 
 esp_err_t Logger::apply_adc_channel_config(const AdcDeviceDef &def) {
-    if (!adc_device_.initialized()) {
+    if (!adc_driver_.initialized()) {
         return ESP_ERR_INVALID_STATE;
     }
 
     if (def.command_msb < 0) {
-        return adc_device_.config_channel(def.channel);
+        return adc_driver_.config_channel(def.channel);
     }
 
-    AdcDevice::ChannelConfig config = {
+    AdcDriver::ChannelConfig config = {
         .tx_data = {
             static_cast<std::uint8_t>(def.command_msb),
             def.command_lsb,
         },
     };
-    return adc_device_.config_channel(def.channel, config);
+    return adc_driver_.config_channel(def.channel, config);
 }
 
 // Maybe switch to a template, would need to implement way to define length of bytes to type
@@ -133,7 +133,7 @@ void Logger::log_sample() {
 
     for (auto &s : adc_states_) {
         if (adc_ready_) {
-            esp_err_t ret = adc_device_.read(s.def.channel, &s.value);
+            esp_err_t ret = adc_driver_.read(s.def.channel, &s.value);
             if (ret != ESP_OK) {
                 ModuleCoreLogger::error("ADC read failed for channel %u: %s",
                                         static_cast<unsigned>(s.def.channel), esp_err_to_name(ret));

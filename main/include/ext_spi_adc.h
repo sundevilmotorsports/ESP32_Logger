@@ -3,11 +3,9 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
-#include "esp_err.h"
 
 namespace ext::spi_adc {
 
@@ -54,31 +52,6 @@ struct ChannelConfig {
 struct Frame {
     std::uint8_t channel_count = 0;
     std::array<std::uint16_t, kMaxChannels> values{};
-};
-
-class Driver {
-public:
-    Driver();
-    ~Driver();
-
-    Driver(const Driver &) = delete;
-    Driver &operator=(const Driver &) = delete;
-
-    Driver(Driver &&) noexcept;
-    Driver &operator=(Driver &&) noexcept;
-
-    esp_err_t initialize(const Config &config);
-    esp_err_t config_channel(Channel channel);
-    esp_err_t config_channel(Channel channel, const ChannelConfig &config);
-    esp_err_t read(Channel channel, int *out_raw) const;
-    esp_err_t read_frame(Frame *out_frame) const;
-    esp_err_t shutdown();
-
-    [[nodiscard]] bool initialized() const { return impl_ != nullptr; }
-
-private:
-    class Impl;
-    std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace ext::spi_adc
