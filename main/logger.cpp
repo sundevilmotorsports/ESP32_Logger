@@ -5,8 +5,8 @@
 #include "module_core.h"
 
 Logger::Logger() : gnss_(GNSS::instance()) {
-    this->name_ = "tmp";
-    // sd_.init();
+    sd_.setName("test");
+    sd_.init();
 
     // this->register_can_device({
     //     .id = 0x01,
@@ -101,7 +101,7 @@ esp_err_t Logger::init_adc(const AdcDriver::Config &config) {
     for (const auto &state : adc_states_) {
         ret = apply_adc_channel_config(state.def);
         if (ret != ESP_OK) {
-            adc_driver_.deinit();
+            adc_driver_.~AdcDriver();
             return ret;
         }
     }

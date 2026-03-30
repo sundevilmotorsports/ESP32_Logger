@@ -23,7 +23,6 @@ public:
     void register_can_device(CanDeviceDef def);
     void register_adc_device(AdcDeviceDef def);
     esp_err_t init_adc(const AdcDriver::Config &config);
-    void set_file_name(std::string name) { this->name_ = std::move(name); }
 
     void on_can_frame(const CanFrame *frame);
 
@@ -31,8 +30,6 @@ public:
 
 private:
     int hz_ = 25;
-
-    std::string name_;
 
     std::vector<CanDeviceState> can_states_;
     std::vector<AdcDeviceState> adc_states_;
@@ -50,8 +47,11 @@ private:
     uint64_t extract(const uint8_t *data, uint8_t data_len, const SignalSlice &sig);
 
     void write_log(const char *buf, size_t len) {
-        /* sd_.write(buf, len); */
-        fwrite(buf, 1, len, stdout);
+        esp_err_t ret = sd_.write(buf, len);
+        if(!ret) {
+            ModuleCoreLogger::error("Failed to write to SD card: %s", esp_err_to_name(ret));
+        }
+        // fwrite(buf, 1, len, stdout);
     }
 
     void log_sample();
