@@ -256,7 +256,7 @@ esp_err_t nvs_increment_testno(uint16_t *testno){
     }
     
     // Increment with rollover
-    *testno = (*testno == 255) ? 0 : *testno + 1;
+    *testno = (*testno == UINT16_MAX) ? 0 : *testno + 1;
     
     // Write and commit
     err = nvs_set_u16(hnvs, "testno", *testno);
@@ -511,7 +511,7 @@ esp_err_t sdcard_create_numbered_log_file(const char *filename){
         snprintf(gpsDate, sizeof(gpsDate), "%d_%d_%d_%d_", GNSS_Handle.month, GNSS_Handle.day, GNSS_Handle.hour, GNSS_Handle.sec);
     }
     // Create the new log filename
-    int written = snprintf(log_path, sizeof(log_path), "%s/%s%s%03d%s", 
+    int written = snprintf(log_path, sizeof(log_path), "%s/%s%s%d%s", 
                           MOUNT_POINT, filename, gpsDate, testno, LOG_TYPE);
     
     // Check if the string was truncated
