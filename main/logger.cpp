@@ -2,27 +2,36 @@
 
 #include <chrono>
 #include <filesystem>
+#include "module_core.h"
 
-Logger::Logger() {
+Logger::Logger() : gnss_(GNSS::instance()) {
     this->name_ = "tmp";
     // sd_.init();
 
     this->register_can_device({
         .id = 0x01,
         .signals = {
-            { "0first",  0, 2 },
-            { "0second", 2, 2 },
-            { "0third",  4, 2 },
-            { "0fourth", 6, 2 },
+            { "0first", 0, 2},
+            {"0second", 2, 2},
+            {"0third", 4, 2},
+            {"0fourth", 6, 2},
         }
     });
 
     this->register_can_device({
         .id = 0x02,
         .signals = {
-            { "large",  0, 8 },
+            {"large", 0, 8},
         }
     });
+
+    this->gnss_.init();
+
+    for (int i = 0; i < 5 && !this->gnss_.isInitialized(); i++) {
+        vTaskDelay(pdMS_TO_TICKS(250));
+    }
+
+    xTaskCreate(GNSS::uartTask, "GNSS", 4096, nullptr, 5, nullptr);
 }
 
 
