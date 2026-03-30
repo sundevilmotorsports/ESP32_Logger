@@ -5,23 +5,27 @@
 #include "module_core.h"
 
 Logger::Logger() : gnss_(GNSS::instance()) {
-    sd_.setName("test");
+    sd_.setName("processed");
     sd_.init();
 
-    // this->register_can_device({
-    //     .id = 0x01,
-    //     .signals = {
-    //         { "0first", 0, 2},
-    //         {"0second", 2, 2},
-    //         {"0third", 4, 2},
-    //         {"0fourth", 6, 2},
-    //     }
-    // });
-    //
+    auto p = [](uint8_t* data, uint8_t len) -> std::string {
+        return "processed";
+    };
+
+    this->register_can_device({
+        .id = 0x01,
+        .signals = {
+            { "0first", 0, 2, p},
+            {"0second", 2, 2},
+            {"0third", 4, 2, p},
+            {"0fourth", 6, 2},
+        }
+    });
+
     // this->register_can_device({
     //     .id = 0x02,
     //     .signals = {
-    //         {"large", 0, 8},
+    //         {"large", 0, 8, [](uint8_t* data) {return nullptr;}},
     //     }
     // });
 
@@ -144,8 +148,13 @@ void Logger::log_sample() {
 
     for (auto &s : can_states_)
         for (const auto &sig : s.def.signals) {
-            pos += snprintf(line + pos, sizeof(line) - pos,
+            if (sig.processing != nullptr) {
+                pos += snprintf(line + pos, sizeof(line) - pos,
+                                ",%s", sig.processing(s.data, s.data_len).c_str());
+            } else {
+                pos += snprintf(line + pos, sizeof(line) - pos,
                                 ",%llu", extract(s.data, s.data_len, sig));
+            }
         }
 
     for (auto &s : adc_states_) {
