@@ -14,6 +14,7 @@
 #include "can_device.h"
 #include "sd.h"
 #include <iostream>
+#include "gnss.h"
 
 class Logger {
 public:
@@ -37,6 +38,8 @@ private:
     std::vector<AdcDeviceState> adc_states_;
     AdcDriver adc_driver_;
     bool adc_ready_ = false;
+
+    GNSS& gnss_;
 
     SDCard sd_;
 
