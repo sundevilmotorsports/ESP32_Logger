@@ -19,7 +19,24 @@ CommandBytes make_custom_command(const ext::spi_adc::ChannelConfig &config) {
 }  // namespace
 
 AdcDriver::~AdcDriver() {
-    (void)deinit();
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!initialized_) {
+        return;
+    }
+
+    esp_err_t ret = ESP_OK;
+    if (spi_handle_ != nullptr) {
+        ret = remove_spi_device();
+    }
+
+    const esp_err_t bus_ret = free_bus_if_owned();
+    if (ret == ESP_OK && bus_ret != ESP_OK) {
+        ret = bus_ret;
+    }
+
+    configured_.fill(false);
+    initialized_ = false;
 }
 
 esp_err_t AdcDriver::init(const Config &config) {
@@ -127,28 +144,6 @@ esp_err_t AdcDriver::read_frame(Frame *out_frame) const {
     }
 
     return read_frame_locked(*out_frame);
-}
-
-esp_err_t AdcDriver::deinit() {
-    std::lock_guard<std::mutex> lock(mutex_);
-
-    if (!initialized_) {
-        return ESP_OK;
-    }
-
-    esp_err_t ret = ESP_OK;
-    if (spi_handle_ != nullptr) {
-        ret = remove_spi_device();
-    }
-
-    const esp_err_t bus_ret = free_bus_if_owned();
-    if (ret == ESP_OK && bus_ret != ESP_OK) {
-        ret = bus_ret;
-    }
-
-    configured_.fill(false);
-    initialized_ = false;
-    return ret;
 }
 
 void AdcDriver::normalize_config() {

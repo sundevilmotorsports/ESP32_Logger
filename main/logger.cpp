@@ -8,21 +8,31 @@ Logger::Logger() : gnss_(GNSS::instance()) {
     this->name_ = "tmp";
     // sd_.init();
 
-    this->register_can_device({
-        .id = 0x01,
-        .signals = {
-            { "0first", 0, 2},
-            {"0second", 2, 2},
-            {"0third", 4, 2},
-            {"0fourth", 6, 2},
-        }
+    // this->register_can_device({
+    //     .id = 0x01,
+    //     .signals = {
+    //         { "0first", 0, 2},
+    //         {"0second", 2, 2},
+    //         {"0third", 4, 2},
+    //         {"0fourth", 6, 2},
+    //     }
+    // });
+    //
+    // this->register_can_device({
+    //     .id = 0x02,
+    //     .signals = {
+    //         {"large", 0, 8},
+    //     }
+    // });
+
+    this->register_adc_device({
+        .name = "adc_ch0",
+        .channel = 0,
     });
 
-    this->register_can_device({
-        .id = 0x02,
-        .signals = {
-            {"large", 0, 8},
-        }
+    this->register_adc_device({
+        .name = "adc_ch6",
+        .channel = 6,
     });
 
     this->gnss_.init();

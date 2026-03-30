@@ -27,7 +27,6 @@ public:
     esp_err_t config_channel(Channel channel, const ChannelConfig &config);
     esp_err_t read(Channel channel, int *out_raw) const;
     esp_err_t read_frame(Frame *out_frame) const;
-    esp_err_t deinit();
 
     [[nodiscard]] bool initialized() const { return initialized_; }
 
