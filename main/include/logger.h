@@ -45,7 +45,7 @@ private:
 
     GNSS& gnss_;
 
-    SDCard sd_{"log0"};
+    SDCard sd_ {};
 
     void write_header();
 

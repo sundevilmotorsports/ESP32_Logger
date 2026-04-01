@@ -21,10 +21,29 @@ class SDCard {
 public:
     static constexpr size_t SECTOR_SIZE = 512;
 
-    explicit SDCard(std::string name) : file_name_(std::move(name)) {}
+    explicit SDCard() = default;
 
     esp_err_t init() {
         if (auto err = mount_card(); err != ESP_OK) return err;
+
+        int next = get_next_log_index();
+        file_name_ = format_log_name(next);
+
+        return open_log();
+    }
+
+    esp_err_t next_log() {
+        std::lock_guard lock(mutex_);
+
+        if (file_.is_open()) {
+            if (buf_len_ > 0) flush_buf();
+            file_.flush();
+            file_.close();
+        }
+
+        int next = get_next_log_index();
+        file_name_ = format_log_name(next);
+
         return open_log();
     }
 
@@ -121,6 +140,40 @@ private:
     std::array<char, SECTOR_SIZE> buf_    {};
     size_t                        buf_len_ = 0;
 
+    int extract_log_index(const std::string& name) {
+        // logXXXX.csv
+        if (name.size() != 11) return -1;
+        if (name[0] != 'l' || name[1] != 'o' || name[2] != 'g') return -1;
+        if (name[7] != '.' || name[8] != 'c' || name[9] != 's' || name[10] != 'v') return -1;
+
+        int value = 0;
+
+        for (int i = 3; i < 7; i++) {
+            if (name[i] < '0' || name[i] > '9') return -1;
+            value = value * 10 + (name[i] - '0');
+        }
+
+        return value;
+    }
+
+    int get_next_log_index() {
+        auto logs = get_logs_list();
+
+        int max_index = 0;
+        for (const auto& log : logs) {
+            int idx = extract_log_index(log);
+            if (idx > max_index) max_index = idx;
+        }
+
+        return max_index + 1;
+    }
+
+    std::string format_log_name(int index) {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "log%04d", index);
+        return std::string(buf);
+    }
+
     esp_err_t flush_buf() {
         if (buf_len_ == 0) return ESP_OK;
         if (!file_.write(buf_.data(), buf_len_)) {
@@ -164,8 +217,7 @@ private:
             return ESP_ERR_INVALID_ARG;
         }
 
-        file_name_ += ".csv";
-        const fs::path path = fs::path(MOUNT_POINT) / file_name_;
+        const fs::path path = fs::path(MOUNT_POINT) / (file_name_ + ".csv");
 
         file_.rdbuf()->pubsetbuf(nullptr, 0);
         file_.open(path, std::ios::out | std::ios::trunc);
