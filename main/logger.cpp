@@ -59,11 +59,30 @@ Logger::Logger() : gnss_(GNSS::instance()) {
             return std::to_string(data);
         }
     });
+    
+    this->register_adc_device({
+        .name = "F_BRAKEPRESSURE",
+        .channel = 4,
+    });
 
     this->register_adc_device({
-        .name = "adc_ch6",
+        .name = "FLSHOCK",
         .channel = 6,
+        .processing = [](int v) -> std::string {
+            float data = ( (-0.018586) * ( (v) - (1311) ) );
+            return std::to_string(data);
+        }
     });
+    
+    this->register_adc_device({
+        .name = "STEERING",
+        .channel = 7,
+        .processing = [](int v) -> std::string {
+            float data =( (0.084769) * ( (v) - (1783) ) );
+            return std::to_string(data);
+        }
+    });
+
 
     this->gnss_.init();
 
