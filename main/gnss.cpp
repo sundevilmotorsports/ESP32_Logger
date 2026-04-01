@@ -229,6 +229,7 @@ bool GNSS::parseGNGGA(const char* sentence) {
     if (n < 6) return false;
 
     state.fixType = static_cast<uint8_t>(quality);
+    state.satellites = satellites;
 
     if (strlen(time_str) >= 6) {
         state.hour = (time_str[0] - '0') * 10 + (time_str[1] - '0');
@@ -256,8 +257,8 @@ bool GNSS::parseGNGGA(const char* sentence) {
 
     state.hMSL = static_cast<int32_t>(altitude);
 
-    ESP_LOGI(TAG, "GGA fix=%d sats=%d lat=%.6f lon=%.6f alt=%.1fm",
-             quality, satellites, state.fLat, state.fLon, altitude);
+    // ESP_LOGI(TAG, "GGA fix=%d sats=%d lat=%.6f lon=%.6f alt=%.1fm",
+             // quality, satellites, state.fLat, state.fLon, altitude);
     return true;
 }
 

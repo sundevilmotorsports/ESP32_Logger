@@ -87,6 +87,8 @@ void Logger::write_header() {
             pos += snprintf(line + pos, sizeof(line) - pos, ",%s", sig.name);
     for (auto &s : adc_states_)
         pos += snprintf(line + pos, sizeof(line) - pos, ",%s", s.def.name);
+
+    pos += snprintf(line + pos, sizeof(line) - pos, "Lat,Lon,Speed");
     line[pos++] = '\n';
     write_log(line, pos);
 }
@@ -172,7 +174,11 @@ void Logger::log_sample() {
             pos += snprintf(line + pos, sizeof(line) - pos, ",%d", s.raw_val);
 
         }
+    }
 
+    if (gnss_.state.satellites > 0) {
+        pos += snprintf(line + pos, sizeof(line) - pos,
+            ",%f,%f,%lu", gnss_.state.fLat, gnss_.state.fLon, gnss_.state.gSpeed);
     }
 
     line[pos++] = '\n';

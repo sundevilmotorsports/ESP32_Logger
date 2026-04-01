@@ -34,6 +34,7 @@ struct GNSSState {
     int32_t  gSpeed               = 0;
     uint8_t  gSpeedBytes[4]       = {};
     int32_t  headMot              = 0;
+    int      satellites           = 0;
 };
 
 class GNSS {
