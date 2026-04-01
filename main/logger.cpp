@@ -5,7 +5,6 @@
 #include "module_core.h"
 
 Logger::Logger() : gnss_(GNSS::instance()) {
-    sd_.setName("processed");
     sd_.init();
 
     auto p = [](uint8_t* data, uint8_t len) -> std::string {
