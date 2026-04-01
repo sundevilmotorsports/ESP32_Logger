@@ -29,8 +29,35 @@ Logger::Logger() : gnss_(GNSS::instance()) {
     // });
 
     this->register_adc_device({
-        .name = "adc_ch0",
+        .name = "FRSHOCK",
         .channel = 0,
+        .processing = [](int v) -> std::string {
+            float data = ( ((-0.018444) * ( (v) - (1324) ) ));
+            return std::to_string(data);
+        }
+    });
+    
+    this->register_adc_device({
+        .name = "RRSHOCK",
+        .channel = 1,
+        .processing = [](int v) -> std::string {
+            float data = ( (-0.018498) * ( (v) - (1370) ) );
+            return std::to_string(data);
+        }
+    });
+
+    this->register_adc_device({
+        .name = "R_BRAKEPRESSURE",
+        .channel = 2,
+    });
+
+    this->register_adc_device({
+        .name = "RLSHOCK",
+        .channel = 3,
+        .processing = [](int v) -> std::string {
+            float data = ( (-0.018498) * ( (v) - (1370) ) );
+            return std::to_string(data);
+        }
     });
 
     this->register_adc_device({
