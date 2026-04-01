@@ -29,7 +29,7 @@ public:
     void on_can_frame(const CanFrame *frame);
 
     void list_logs();
-    void dump_log();
+    void dump_log(const std::string& filename = "");
 
     void on_uart_rx(const uint8_t *data, size_t len);
 
@@ -45,7 +45,7 @@ private:
 
     GNSS& gnss_;
 
-    SDCard sd_{"processed"};
+    SDCard sd_{"log0"};
 
     void write_header();
 

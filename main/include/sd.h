@@ -76,10 +76,29 @@ public:
         return result;
     }
 
+    uint64_t get_file_size(const std::string& name) {
+        std::error_code ec;
+        auto sz = fs::file_size(fs::path(MOUNT_POINT) / name, ec);
+        return ec ? 0 : static_cast<uint64_t>(sz);
+    }
+
     // Flush pending writes then call cb for each chunk of the current log file.
     void stream_current(size_t chunk_size, std::function<void(const uint8_t *, size_t)> cb) {
         sync();
         std::ifstream f(fs::path(MOUNT_POINT) / file_name_, std::ios::binary);
+        if (!f) return;
+        std::vector<char> buf(chunk_size);
+        while (true) {
+            f.read(buf.data(), static_cast<std::streamsize>(chunk_size));
+            auto n = f.gcount();
+            if (n <= 0) break;
+            cb(reinterpret_cast<const uint8_t *>(buf.data()), static_cast<size_t>(n));
+        }
+    }
+
+    // Call cb for each chunk of a named file (read-only, no sync needed).
+    void stream_file(const std::string& name, size_t chunk_size, std::function<void(const uint8_t *, size_t)> cb) {
+        std::ifstream f(fs::path(MOUNT_POINT) / name, std::ios::binary);
         if (!f) return;
         std::vector<char> buf(chunk_size);
         while (true) {
@@ -145,9 +164,9 @@ private:
             return ESP_ERR_INVALID_ARG;
         }
 
-        const fs::path path = fs::path(MOUNT_POINT) / file_name_ += ".csv";
+        file_name_ += ".csv";
+        const fs::path path = fs::path(MOUNT_POINT) / file_name_;
 
-        // Disable fstream's own buffer
         file_.rdbuf()->pubsetbuf(nullptr, 0);
         file_.open(path, std::ios::out | std::ios::trunc);
         if (!file_.is_open()) {
@@ -155,6 +174,7 @@ private:
             return ESP_FAIL;
         }
 
+        ESP_LOGI(TAG, "Logging to %s", path.c_str());
         return ESP_OK;
     }
 };

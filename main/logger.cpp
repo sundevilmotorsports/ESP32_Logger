@@ -82,34 +82,42 @@ void Logger::on_can_frame(const CanFrame *frame) {
 void Logger::list_logs() {
     std::vector<std::string> files = sd_.get_logs_list();
 
-    for (std::string file : files) {
+    for (const std::string& file : files) {
+        uint64_t size = sd_.get_file_size(file);
+        // Payload: "<name>\0<size_decimal>" — host splits on null to get name and size
+        std::string payload = file + '\0' + std::to_string(size);
+
         ModuleCore::UartResponse resp {};
         resp.msg_type = 0xA1;
-        resp.data = reinterpret_cast<uint8_t *>(file.data());
-        resp.data_len = file.length();
+        resp.data = reinterpret_cast<uint8_t *>(payload.data());
+        resp.data_len = payload.size();
         resp.source_device = g_module.getId();
-
         g_module.sendUartResponse(resp);
     }
 
     ModuleCore::UartResponse resp {};
     resp.msg_type = 0xA1;
     resp.source_device = g_module.getId();
-
     g_module.sendUartResponse(resp);
 }
 
-void Logger::dump_log() {
+void Logger::dump_log(const std::string& filename) {
     static constexpr size_t CHUNK = 128;
 
-    sd_.stream_current(CHUNK, [](const uint8_t *chunk, size_t len) {
+    auto send_chunk = [](const uint8_t *chunk, size_t len) {
         ModuleCore::UartResponse resp{};
         resp.msg_type      = 0xA2; // MSG_LOG_SLICE
         resp.source_device = g_module.getId();
         resp.data          = const_cast<uint8_t *>(chunk);
         resp.data_len      = len;
         g_module.sendUartResponse(resp);
-    });
+    };
+
+    if (filename.empty()) {
+        sd_.stream_current(CHUNK, send_chunk);
+    } else {
+        sd_.stream_file(filename, CHUNK, send_chunk);
+    }
 
     // Empty slice signals end-of-stream to the host
     ModuleCore::UartResponse eos{};
@@ -125,9 +133,14 @@ void Logger::on_uart_rx(const uint8_t *data, size_t len) {
         case 0x51:      // CMD_LIST_LOGS
             list_logs();
             break;
-        case 0x52:      // CMD_DUMP_LOG
-            dump_log();
+        case 0x52: {    // CMD_DUMP_LOG — optional filename in payload bytes [2..]
+            std::string filename;
+            if (len > 2) {
+                filename = std::string(reinterpret_cast<const char*>(data + 2), len - 2);
+            }
+            dump_log(filename);
             break;
+        }
         default:
             break;
     }
