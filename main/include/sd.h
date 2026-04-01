@@ -1,10 +1,12 @@
 #pragma once
 
 #include <fstream>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <mutex>
 #include <filesystem>
+#include <vector>
 #include <array>
 #include <cstring>
 
@@ -61,6 +63,31 @@ public:
             file_.close();
         }
         if (card_) esp_vfs_fat_sdcard_unmount(MOUNT_POINT, card_);
+    }
+
+    std::vector<std::string> get_logs_list() {
+        std::vector<std::string> result;
+        std::error_code ec;
+        for (const auto &entry : fs::directory_iterator(MOUNT_POINT, ec)) {
+            if (!ec && entry.is_regular_file(ec))
+                result.push_back(entry.path().filename().string());
+            ec.clear();
+        }
+        return result;
+    }
+
+    // Flush pending writes then call cb for each chunk of the current log file.
+    void stream_current(size_t chunk_size, std::function<void(const uint8_t *, size_t)> cb) {
+        sync();
+        std::ifstream f(fs::path(MOUNT_POINT) / file_name_, std::ios::binary);
+        if (!f) return;
+        std::vector<char> buf(chunk_size);
+        while (true) {
+            f.read(buf.data(), static_cast<std::streamsize>(chunk_size));
+            auto n = f.gcount();
+            if (n <= 0) break;
+            cb(reinterpret_cast<const uint8_t *>(buf.data()), static_cast<size_t>(n));
+        }
     }
 
 private:

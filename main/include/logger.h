@@ -16,6 +16,8 @@
 #include <iostream>
 #include "gnss.h"
 
+static ModuleCore g_module;
+
 class Logger {
 public:
     Logger();
@@ -25,6 +27,11 @@ public:
     esp_err_t init_adc(const AdcDriver::Config &config);
 
     void on_can_frame(const CanFrame *frame);
+
+    void list_logs();
+    void dump_log();
+
+    void on_uart_rx(const uint8_t *data, size_t len);
 
     std::expected<void, ModuleCoreError> main();
 

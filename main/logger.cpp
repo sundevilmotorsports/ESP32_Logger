@@ -79,6 +79,60 @@ void Logger::on_can_frame(const CanFrame *frame) {
     }
 }
 
+void Logger::list_logs() {
+    std::vector<std::string> files = sd_.get_logs_list();
+
+    for (std::string file : files) {
+        ModuleCore::UartResponse resp {};
+        resp.msg_type = 0xA1;
+        resp.data = reinterpret_cast<uint8_t *>(file.data());
+        resp.data_len = file.length();
+        resp.source_device = g_module.getId();
+
+        g_module.sendUartResponse(resp);
+    }
+
+    ModuleCore::UartResponse resp {};
+    resp.msg_type = 0xA1;
+    resp.source_device = g_module.getId();
+
+    g_module.sendUartResponse(resp);
+}
+
+void Logger::dump_log() {
+    static constexpr size_t CHUNK = 128;
+
+    sd_.stream_current(CHUNK, [](const uint8_t *chunk, size_t len) {
+        ModuleCore::UartResponse resp{};
+        resp.msg_type      = 0xA2; // MSG_LOG_SLICE
+        resp.source_device = g_module.getId();
+        resp.data          = const_cast<uint8_t *>(chunk);
+        resp.data_len      = len;
+        g_module.sendUartResponse(resp);
+    });
+
+    // Empty slice signals end-of-stream to the host
+    ModuleCore::UartResponse eos{};
+    eos.msg_type      = 0xA2;
+    eos.source_device = g_module.getId();
+    g_module.sendUartResponse(eos);
+}
+
+void Logger::on_uart_rx(const uint8_t *data, size_t len) {
+    if (len < 2) { return; }
+
+    switch (data[1]) {
+        case 0x51:      // CMD_LIST_LOGS
+            list_logs();
+            break;
+        case 0x52:      // CMD_DUMP_LOG
+            dump_log();
+            break;
+        default:
+            break;
+    }
+}
+
 void Logger::write_header() {
     char   line[512];
     size_t pos = snprintf(line, sizeof(line), "timestamp");
