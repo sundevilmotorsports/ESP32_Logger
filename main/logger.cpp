@@ -158,14 +158,21 @@ void Logger::log_sample() {
 
     for (auto &s : adc_states_) {
         if (adc_ready_) {
-            esp_err_t ret = adc_driver_.read(s.def.channel, &s.value);
+            esp_err_t ret = adc_driver_.read(s.def.channel, &s.raw_val);
             if (ret != ESP_OK) {
                 ModuleCoreLogger::error("ADC read failed for channel %u: %s",
                                         static_cast<unsigned>(s.def.channel), esp_err_to_name(ret));
-                s.value = 0;
+                s.raw_val = 0;
             }
         }
-        pos += snprintf(line + pos, sizeof(line) - pos, ",%d", s.value);
+        if (s.def.processing != nullptr){
+            pos += snprintf(line + pos, sizeof(line) - pos, 
+                            ",%s", s.def.processing(s.raw_val).c_str());
+        } else {
+            pos += snprintf(line + pos, sizeof(line) - pos, ",%d", s.raw_val);
+
+        }
+
     }
 
     line[pos++] = '\n';
