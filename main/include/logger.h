@@ -16,6 +16,8 @@
 #include <iostream>
 #include "gnss.h"
 
+static ModuleCore g_module;
+
 class Logger {
 public:
     Logger();
@@ -25,6 +27,11 @@ public:
     esp_err_t init_adc(const AdcDriver::Config &config);
 
     void on_can_frame(const CanFrame *frame);
+
+    void list_logs();
+    void dump_log();
+
+    void on_uart_rx(const uint8_t *data, size_t len);
 
     std::expected<void, ModuleCoreError> main();
 
@@ -38,7 +45,7 @@ private:
 
     GNSS& gnss_;
 
-    SDCard sd_;
+    SDCard sd_{"processed"};
 
     void write_header();
 
@@ -47,11 +54,10 @@ private:
     uint64_t extract(const uint8_t *data, uint8_t data_len, const SignalSlice &sig);
 
     void write_log(const char *buf, size_t len) {
-        esp_err_t ret = sd_.write(buf, len);
-        if(!ret) {
+        esp_err_t ret = sd_.write(std::string_view{buf, len});
+        if (ret != ESP_OK) {
             ModuleCoreLogger::error("Failed to write to SD card: %s", esp_err_to_name(ret));
         }
-        // fwrite(buf, 1, len, stdout);
     }
 
     void log_sample();
