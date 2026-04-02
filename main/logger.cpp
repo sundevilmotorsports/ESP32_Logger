@@ -303,17 +303,6 @@ Logger::Logger() : gnss_(GNSS::instance()) {
     });
 
 
-    this->gnss_.init();
-
-    for (int i = 0; i < 5 && !this->gnss_.isInitialized(); i++) {
-        vTaskDelay(pdMS_TO_TICKS(250));
-    }
-
-    xTaskCreate(GNSS::uartTask, "GNSS", 4096, nullptr, 5, nullptr);
-
-    for (;;) {
-        vTaskDelay(pdMS_TO_TICKS(250));
-    }
 }
 
 
@@ -586,6 +575,14 @@ void Logger::log_sample() {
 }
 
 std::expected<void, ModuleCoreError> Logger::main() {
+    gnss_.init();
+
+    for (int i = 0; i < 5 && !gnss_.isInitialized(); i++) {
+        vTaskDelay(pdMS_TO_TICKS(250));
+    }
+
+    xTaskCreate(GNSS::uartTask, "GNSS", 4096, nullptr, 5, nullptr);
+
     write_header();
 
     esp_timer_handle_t timer;

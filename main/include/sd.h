@@ -8,8 +8,11 @@
 #include <filesystem>
 #include <vector>
 #include <array>
+#include <cstdio>
+#include <cerrno>
 #include <cstring>
 #include <iostream>
+#include <unistd.h>
 
 #include "esp_vfs_fat.h"
 #include "driver/sdmmc_host.h"
@@ -41,10 +44,10 @@ public:
     esp_err_t next_log() {
         std::lock_guard lock(mutex_);
 
-        if (file_.is_open()) {
+        if (file_ != nullptr) {
             if (buf_len_ > 0) flush_buf();
-            file_.flush();
-            file_.close();
+            std::fclose(file_);
+            file_ = nullptr;
         }
 
         int next = get_next_log_index();
@@ -54,9 +57,8 @@ public:
     }
 
     esp_err_t write(std::string_view data) {
-        if (!file_.is_open()) return ESP_ERR_INVALID_STATE;
-
         std::lock_guard lock(mutex_);
+        if (file_ == nullptr) return ESP_ERR_INVALID_STATE;
 
         while (!data.empty()) {
             const size_t space = SECTOR_SIZE - buf_len_;
@@ -71,22 +73,22 @@ public:
             }
         }
 
-        return sync();
+        if (auto err = flush_buf(); err != ESP_OK) return err;
+        return ESP_OK;
     }
 
     esp_err_t sync() {
-        if (!file_.is_open()) return ESP_ERR_INVALID_STATE;
         std::lock_guard lock(mutex_);
+        if (file_ == nullptr) return ESP_ERR_INVALID_STATE;
         if (auto err = flush_buf(); err != ESP_OK) return err;
-        file_.flush();
         return ESP_OK;
     }
 
     ~SDCard() {
-        if (file_.is_open()) {
+        if (file_ != nullptr) {
             if (buf_len_ > 0) flush_buf();
-            file_.flush();
-            file_.close();
+            std::fclose(file_);
+            file_ = nullptr;
         }
         if (card_) esp_vfs_fat_sdcard_unmount(MOUNT_POINT, card_);
     }
@@ -140,7 +142,7 @@ private:
     static constexpr const char *MOUNT_POINT = "/sdcard";
 
     sdmmc_card_t *card_ = nullptr;
-    std::ofstream file_;
+    std::FILE *file_ = nullptr;
     std::mutex mutex_;
     std::string file_name_;
 
@@ -190,27 +192,42 @@ private:
 
         const fs::path path = fs::path(MOUNT_POINT) / (file_name_ + ".csv");
 
-        if (file_.is_open()) file_.close();
-        // Do not call pubsetbuf(nullptr, 0)
-        file_.open(path, std::ios::out | std::ios::trunc | std::ios::binary);
-        if (!file_.is_open()) {
-            ESP_LOGE(TAG, "failed to open '%s'", path.c_str());
+        const std::string path_str = path.string();
+
+        if (file_ != nullptr) {
+            std::fclose(file_);
+            file_ = nullptr;
+        }
+
+        file_ = std::fopen(path_str.c_str(), "wb");
+        if (file_ == nullptr) {
+            ESP_LOGE(TAG, "failed to open '%s'", path_str.c_str());
             return ESP_FAIL;
         }
 
-        ESP_LOGI(TAG, "Logging to %s", path.c_str());
+        ESP_LOGI(TAG, "Logging to %s", path_str.c_str());
         return ESP_OK;
     }
 
     esp_err_t flush_buf() {
         if (buf_len_ == 0) return ESP_OK;
-        file_.write(buf_.data(), static_cast<std::streamsize>(buf_len_));
-        if (file_.fail()) {
+
+        const size_t written = std::fwrite(buf_.data(), 1, buf_len_, file_);
+        if (written != buf_len_) {
             ESP_LOGE(TAG, "write failed for %zu bytes", buf_len_);
             return ESP_FAIL;
         }
-        // Ensure data is pushed to the VFS
-        file_.flush();
+
+        if (std::fflush(file_) != 0) {
+            ESP_LOGE(TAG, "fflush failed, errno=%d", errno);
+            return ESP_FAIL;
+        }
+
+        if (fsync(fileno(file_)) != 0) {
+            ESP_LOGE(TAG, "fsync failed, errno=%d", errno);
+            return ESP_FAIL;
+        }
+
         buf_len_ = 0;
         return ESP_OK;
     }
