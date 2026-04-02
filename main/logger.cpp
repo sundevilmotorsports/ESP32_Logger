@@ -11,16 +11,206 @@ Logger::Logger() : gnss_(GNSS::instance()) {
         return "processed";
     };
 
+    auto mux_frame = [](uint8_t frame_index) {
+        return [frame_index](const uint8_t* data, uint8_t len) -> bool {
+            return len > 0 && data[0] == frame_index;
+        };
+    };
+
+    // this->register_can_device({
+    //     .id = 0x01,
+    //     .signals = {
+    //         { "0first", 0, 2, p},
+    //         {"0second", 2, 2},
+    //         {"0third", 4, 2, p},
+    //         {"0fourth", 6, 2},
+    //     }
+    // });
+
+    // IMU Gyro
     this->register_can_device({
-        .id = 0x01,
+        .id = 0x360,
         .signals = {
-            { "0first", 0, 2, p},
-            {"0second", 2, 2},
-            {"0third", 4, 2, p},
-            {"0fourth", 6, 2},
+            {"IMU_X_GYRO", 0, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+                    int16_t raw;
+                    memcpy(&raw, data, sizeof(raw));
+                    float out = ((float)raw * 17.50);
+                    return std::to_string(out);
+                }
+            },
+            {"IMU_Y_GYRO", 2, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+                    int16_t raw;
+                    memcpy(&raw, data, sizeof(raw));
+                    float out = ((float)raw * 17.50);
+                    return std::to_string(out);
+                }
+            },
+            {"IMU_Z_GYRO", 4, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+                    int16_t raw;
+                    memcpy(&raw, data, sizeof(raw));
+                    float out = ((float)raw * 17.50);
+                    return std::to_string(out);
+                }
+            }
+
         }
     });
 
+    // IMU Accel
+    this->register_can_device({
+        .id = 0x361,
+        .signals = {
+            {"IMU_X_ACCEL", 0, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+                    int16_t raw;
+                    memcpy(&raw, data, sizeof(raw));
+                    float out = ((float)raw * 0.122) / (float)1000;
+                    return std::to_string(out);
+                }
+            },
+            {"IMU_Y_ACCEL", 2, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+                    int16_t raw;
+                    memcpy(&raw, data, sizeof(raw));
+                    float out = ((float)raw * 0.122) / (float)1000;
+                    return std::to_string(out);
+                }
+            },
+            {"IMU_Z_ACCEL", 4, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+                    int16_t raw;
+                    memcpy(&raw, data, sizeof(raw));
+                    float out = ((float)raw * 0.122) / (float)1000;
+                    return std::to_string(out);
+                }
+            }
+
+        }
+    });
+
+    // FL WheelBoard
+    this->register_can_device({
+        .id = 0x370,
+        .signals = {
+            {"FLW_RPM", 0, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+                    uint16_t raw = data[0] << 8 | data[1];
+                    return std::to_string(raw);
+                }
+            },
+            {"FLW_OBJ", 2, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+                    uint16_t raw = data[0] << 8 | data[1];
+                    float out = (((float)raw * 0.02) - 273.15) / (float)1000;
+                    return std::to_string(out);                }
+            },
+            {"FLW_AMB", 4, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+                    uint16_t raw = data[0] << 8 | data[1];
+                    float out = (((float)raw * 0.02) - 273.15) / (float)1000;
+                    return std::to_string(out);                }
+            }
+
+        }
+    });
+    // FR Wheel Board
+    this->register_can_device({
+        .id = 0x380,
+        .signals = {
+            {"FRW_RPM", 0, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+                    uint16_t raw = data[0] << 8 | data[1];
+                    return std::to_string(raw);
+                }
+            },
+            {"FRW_OBJ", 2, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+                    uint16_t raw = data[0] << 8 | data[1];
+                    float out = (((float)raw * 0.02) - 273.15) / (float)1000;
+                    return std::to_string(out);                }
+            },
+            {"FRW_AMB", 4, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+                    uint16_t raw = data[0] << 8 | data[1];
+                    float out = (((float)raw * 0.02) - 273.15) / (float)1000;
+                    return std::to_string(out);                }
+            }
+
+        }
+    });
+    //RR Wheelbaord
+    this->register_can_device({
+        .id = 0x390,
+        .signals = {
+            {"RRW_RPM", 0, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+                    uint16_t raw = data[0] << 8 | data[1];
+                    return std::to_string(raw);
+                }
+            },
+            {"RRW_OBJ", 2, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+                    uint16_t raw = data[0] << 8 | data[1];
+                    float out = (((float)raw * 0.02) - 273.15) / (float)1000;
+                    return std::to_string(out);                }
+            },
+            {"RRW_AMB", 4, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+                    uint16_t raw = data[0] << 8 | data[1];
+                    float out = (((float)raw * 0.02) - 273.15) / (float)1000;
+                    return std::to_string(out);                }
+            }
+
+        }
+    });
+    //RL Wheelbaord
+    this->register_can_device({
+        .id = 0x3A0,
+        .signals = {
+            {"RLW_RPM", 0, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+                    uint16_t raw = data[0] << 8 | data[1];
+                    return std::to_string(raw);
+                }
+            },
+            {"RLW_OBJ", 2, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+                    uint16_t raw = data[0] << 8 | data[1];
+                    float out = (((float)raw * 0.02) - 273.15) / (float)1000;
+                    return std::to_string(out);
+                }
+            },
+            {"RLW_AMB", 4, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+                    uint16_t raw = data[0] << 8 | data[1];
+                    float out = (((float)raw * 0.02) - 273.15) / (float)1000;
+                    return std::to_string(out);                }
+            }
+
+        }
+    });
+
+    // Engine CAN Stream 2, muxed by data[0]
+    this->register_can_device({
+        .id = 0x3E8,
+        .matches = mux_frame(0x0),
+        .signals = {
+            {"ENGINE_ECT", 3, 1},
+            {"ENGINE_OIL_PRESS", 5, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+                    uint16_t raw = data[0] << 8 | data[1];
+                    return std::to_string(raw);
+                }
+            },
+        }
+    });
+
+    this->register_can_device({
+        .id = 0x3E8,
+        .matches = mux_frame(0x1),
+        .signals = {
+            {"ENGINE_TPS", 2, 1},
+            {"ENGINE_DRIVEN_WSPD", 4, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+                    uint16_t raw = data[0] << 8 | data[1];
+                    return std::to_string(raw);
+                }
+            },
+        }
+    });
+
+    this->register_can_device({
+        .id = 0x3E8,
+        .matches = mux_frame(0x2),
+        .signals = {
+            {"ENGINE_APS", 1, 1},
+        }
+    });
+
+    
     // this->register_can_device({
     //     .id = 0x02,
     //     .signals = {
@@ -113,15 +303,15 @@ void Logger::register_adc_device(AdcDeviceDef def) {
 }
 
 void Logger::on_can_frame(const CanFrame *frame) {
-    if (frame->header.ide == 0) return;
-    ParsedArbId parsed = parse_arb_id(frame->header.id);
-    if (parsed.cmd != CMD_DATA) return;
-
     for (auto &s : can_states_) {
-        if (s.def.id != parsed.source) continue;
+        if (s.def.id != frame->header.id) continue;
+        if (s.def.extended != static_cast<bool>(frame->header.ide)) continue;
+        if (s.def.matches != nullptr && !s.def.matches(frame->data, frame->len)) continue;
         memcpy(s.data, frame->data, frame->len);
+        if (frame->len < sizeof(s.data)) {
+            memset(s.data + frame->len, 0, sizeof(s.data) - frame->len);
+        }
         s.data_len = frame->len;
-        return;
     }
 }
 
@@ -264,7 +454,7 @@ void Logger::log_sample() {
         for (const auto &sig : s.def.signals) {
             if (sig.processing != nullptr) {
                 pos += snprintf(line + pos, sizeof(line) - pos,
-                                ",%s", sig.processing(s.data, s.data_len).c_str());
+                                ",%s", sig.processing(s.data + sig.offset, sig.len).c_str());
             } else {
                 pos += snprintf(line + pos, sizeof(line) - pos,
                                 ",%llu", extract(s.data, s.data_len, sig));

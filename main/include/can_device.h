@@ -1,20 +1,27 @@
 #pragma once
 
+#include <cstdint>
+#include <functional>
+#include <string>
+#include <vector>
+
 struct SignalSlice {
     const char *name;
-    uint8_t     offset;
-    uint8_t     len;
+    std::uint8_t offset;
+    std::uint8_t len;
 
-    std::function<std::string(uint8_t*, uint8_t)> processing = nullptr;
+    std::function<std::string(std::uint8_t*, std::uint8_t)> processing = nullptr;
 };
 
 struct CanDeviceDef {
-    uint8_t                  id;
+    std::uint32_t id = 0;
+    bool extended = false;
+    std::function<bool(const std::uint8_t*, std::uint8_t)> matches = nullptr;
     std::vector<SignalSlice> signals;
 };
 
 struct CanDeviceState {
     CanDeviceDef def;
-    uint8_t      data[8] = {};
-    uint8_t      data_len = 0;
+    std::uint8_t data[8] = {};
+    std::uint8_t data_len = 0;
 };
