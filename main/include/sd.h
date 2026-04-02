@@ -101,10 +101,13 @@ public:
         return ec ? 0 : static_cast<uint64_t>(sz);
     }
 
+    // Returns the filename (with .csv) of the currently open log.
+    std::string get_current_name() const { return file_name_ + ".csv"; }
+
     // Flush pending writes then call cb for each chunk of the current log file.
     void stream_current(size_t chunk_size, std::function<void(const uint8_t *, size_t)> cb) {
         sync();
-        std::ifstream f(fs::path(MOUNT_POINT) / file_name_, std::ios::binary);
+        std::ifstream f(fs::path(MOUNT_POINT) / (file_name_ + ".csv"), std::ios::binary);
         if (!f) return;
         std::vector<char> buf(chunk_size);
         while (true) {

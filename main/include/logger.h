@@ -33,6 +33,8 @@ public:
 
     void on_uart_rx(const uint8_t *data, size_t len);
 
+    void send_log_snapshot();
+
     std::expected<void, ModuleCoreError> main();
 
 private:

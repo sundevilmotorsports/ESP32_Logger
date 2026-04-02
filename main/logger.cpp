@@ -14,7 +14,7 @@ Logger::Logger() : gnss_(GNSS::instance()) {
     this->register_can_device({
         .id = 0x01,
         .signals = {
-            { "0first", 0, 2, p},
+            {"0first", 0, 2, p},
             {"0second", 2, 2},
             {"0third", 4, 2, p},
             {"0fourth", 6, 2},
@@ -126,6 +126,7 @@ void Logger::on_can_frame(const CanFrame *frame) {
 }
 
 void Logger::list_logs() {
+    sd_.sync();
     std::vector<std::string> files = sd_.get_logs_list();
 
     for (const std::string& file : files) {
@@ -187,9 +188,73 @@ void Logger::on_uart_rx(const uint8_t *data, size_t len) {
             dump_log(filename);
             break;
         }
+        case 0x53: {    // CMD_GET_CURRENT_LOG
+            std::string name = sd_.get_current_name();
+            ModuleCore::UartResponse resp{};
+            resp.msg_type      = 0xA4; // MSG_CURRENT_LOG
+            resp.source_device = g_module.getId();
+            resp.data          = reinterpret_cast<uint8_t *>(name.data());
+            resp.data_len      = name.size();
+            g_module.sendUartResponse(resp);
+            break;
+        }
+        case 0x54: {    // CMD_SNAPSHOT
+            send_log_snapshot();
+            break;
+        }
         default:
             break;
     }
+}
+
+void Logger::send_log_snapshot() {
+    char   line[512];
+    size_t pos = snprintf(line, sizeof(line), "timestamp");
+    for (auto &s : can_states_)
+        for (const auto &sig : s.def.signals)
+            pos += snprintf(line + pos, sizeof(line) - pos, ",%s", sig.name);
+    for (auto &s : adc_states_)
+        pos += snprintf(line + pos, sizeof(line) - pos, ",%s", s.def.name);
+    pos += snprintf(line + pos, sizeof(line) - pos, ",Lat,Lon,Speed");
+    line[pos++] = '\n';
+
+    pos += snprintf(line + pos, sizeof(line) - pos, "%llu",
+                          static_cast<unsigned long long>(esp_timer_get_time() / 1000));
+
+    for (auto &s : can_states_)
+        for (const auto &sig : s.def.signals) {
+            if (sig.processing != nullptr) {
+                pos += snprintf(line + pos, sizeof(line) - pos,
+                                ",%s", sig.processing(s.data, s.data_len).c_str());
+            } else {
+                pos += snprintf(line + pos, sizeof(line) - pos,
+                                ",%llu", extract(s.data, s.data_len, sig));
+            }
+        }
+
+    for (auto &s : adc_states_) {
+        // Use cached raw_val — do NOT call adc_driver_.read() here since this runs
+        // on the UART task and SPI transactions from that context cause a crash.
+        if (s.def.processing != nullptr){
+            pos += snprintf(line + pos, sizeof(line) - pos,
+                            ",%s", s.def.processing(s.raw_val).c_str());
+        } else {
+            pos += snprintf(line + pos, sizeof(line) - pos, ",%d", s.raw_val);
+        }
+    }
+
+    if (gnss_.state.satellites > 0) {
+        pos += snprintf(line + pos, sizeof(line) - pos,
+            ",%f,%f,%lu", gnss_.state.fLat, gnss_.state.fLon, gnss_.state.gSpeed);
+    }
+
+    line[pos++] = '\n';
+    ModuleCore::UartResponse resp{};
+    resp.msg_type      = 0xA3; // MSG_SNAPSHOT
+    resp.source_device = g_module.getId();
+    resp.data          = reinterpret_cast<uint8_t *>(line);
+    resp.data_len      = pos;
+    g_module.sendUartResponse(resp);
 }
 
 void Logger::write_header() {
