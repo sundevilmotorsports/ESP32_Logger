@@ -180,8 +180,8 @@ Logger::Logger() : gnss_(GNSS::instance()) {
         .id = 0x3E8,
         .matches = mux_frame(0x0),
         .signals = {
-            {"ENGINE_ECT", 3, 1},
-            {"ENGINE_OIL_PRESS", 5, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+            {"ECT", 3, 1},
+            {"OIL_PSR", 5, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
                     uint16_t raw = data[0] << 8 | data[1];
                     return std::to_string(raw);
                 }
@@ -193,8 +193,8 @@ Logger::Logger() : gnss_(GNSS::instance()) {
         .id = 0x3E8,
         .matches = mux_frame(0x1),
         .signals = {
-            {"ENGINE_TPS", 2, 1},
-            {"ENGINE_DRIVEN_WSPD", 4, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
+            {"TPS", 2, 1},
+            {"DRIVEN_WSPD", 4, 2, [] (uint8_t* data, uint8_t /*len*/) -> std::string {
                     uint16_t raw = data[0] << 8 | data[1];
                     return std::to_string(raw);
                 }
@@ -206,11 +206,40 @@ Logger::Logger() : gnss_(GNSS::instance()) {
         .id = 0x3E8,
         .matches = mux_frame(0x2),
         .signals = {
-            {"ENGINE_APS", 1, 1},
+            {"APS", 1, 1},
         }
     });
 
+    // Front Left Strain Gauge
+    this->register_can_device({
+        .id = 0x4E2,
+        .signals = {
+            {"FL_SG", 0, 2}
+        }
+    });
 
+    // Front Right Strain Gauge
+    this->register_can_device({
+        .id = 0x4E3,
+        .signals = {
+            {"FR_SG", 0, 2},
+        }
+    });
+
+    // Rear Right Strain Gauge
+    this->register_can_device({
+        .id = 0x4E4,
+        .signals = {
+            {"FR_SG", 0, 2},
+        }
+    });
+    // Rear Left Strain Gauge
+    this->register_can_device({
+        .id = 0x4E5,
+        .signals = {
+            {"FR_SG", 0, 2},
+        }
+    });
     // this->register_can_device({
     //     .id = 0x02,
     //     .signals = {
