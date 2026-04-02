@@ -58,14 +58,14 @@ extern "C" void app_main() {
     ESP_ERROR_CHECK(logger.init_adc(adc_cfg));
 
     for (;;) {
-        for (uint8_t id : { 0x01, 0x02 }) {
-            CanFrame frame{};
-            frame.header.ide = 1;
-            frame.header.id  = build_arb_id(0x00, CMD_DATA, id);
-            frame.len        = 8;
-            for (auto &b : frame.data) b = esp_random() & 0xFF;
-            logger.on_can_frame(&frame);
-        }
+        // for (uint8_t id : { 0x01, 0x02 }) {
+        //     CanFrame frame{};
+        //     frame.header.ide = 1;
+        //     frame.header.id  = build_arb_id(0x00, CMD_DATA, id);
+        //     frame.len        = 8;
+        //     for (auto &b : frame.data) b = esp_random() & 0xFF;
+        //     logger.on_can_frame(&frame);
+        // }
         
         vTaskDelay(pdMS_TO_TICKS(10));
     }

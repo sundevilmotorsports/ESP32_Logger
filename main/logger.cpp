@@ -281,6 +281,10 @@ Logger::Logger() : gnss_(GNSS::instance()) {
     }
 
     xTaskCreate(GNSS::uartTask, "GNSS", 4096, nullptr, 5, nullptr);
+
+    for (;;) {
+        vTaskDelay(pdMS_TO_TICKS(250));
+    }
 }
 
 
