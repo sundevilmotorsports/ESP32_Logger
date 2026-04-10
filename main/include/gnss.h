@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <mutex>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -52,6 +53,12 @@ public:
 
     static void uartTask(void* pvParameters);
 
+    // Thread-safe snapshot of the GNSS state.
+    GNSSState get_state() const {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        return state;
+    }
+
     GNSSState state{};
     TaskHandle_t taskHandle = nullptr;
 
@@ -67,6 +74,7 @@ private:
     void parseGSV(const char* sentence);
     void processNMEA(const char* sentence, size_t len);
 
+    mutable std::mutex state_mutex_;
     QueueHandle_t eventQueue_ = nullptr;
     uint8_t*      dmaBuf_     = nullptr;
     bool          ready_      = false;

@@ -329,9 +329,10 @@ void Logger::on_can_frame(const CanFrame *frame) {
         if (s.def.id != frame->header.id) continue;
         if (s.def.extended != static_cast<bool>(frame->header.ide)) continue;
         if (s.def.matches != nullptr && !s.def.matches(frame->data, frame->len)) continue;
-        memcpy(s.data, frame->data, frame->len);
-        if (frame->len < sizeof(s.data)) {
-            memset(s.data + frame->len, 0, sizeof(s.data) - frame->len);
+        const uint8_t safe_len = std::min(frame->len, static_cast<uint8_t>(sizeof(s.data)));
+        memcpy(s.data, frame->data, safe_len);
+        if (safe_len < sizeof(s.data)) {
+            memset(s.data + safe_len, 0, sizeof(s.data) - safe_len);
         }
         s.data_len = frame->len;
     }
@@ -395,6 +396,11 @@ void Logger::on_uart_rx(const uint8_t *data, size_t len) {
             std::string filename;
             if (len > 2) {
                 filename = std::string(reinterpret_cast<const char*>(data + 2), len - 2);
+                // Reject path traversal / absolute paths.
+                if (filename.find('/') != std::string::npos ||
+                    filename.find("..") != std::string::npos) {
+                    break;
+                }
             }
             dump_log(filename);
             break;
@@ -419,7 +425,7 @@ void Logger::on_uart_rx(const uint8_t *data, size_t len) {
 }
 
 void Logger::send_log_snapshot() {
-    char   line[512];
+    char   line[1024];
     size_t pos = snprintf(line, sizeof(line), "timestamp");
     for (auto &s : can_states_)
         for (const auto &sig : s.def.signals)
@@ -427,6 +433,7 @@ void Logger::send_log_snapshot() {
     for (auto &s : adc_states_)
         pos += snprintf(line + pos, sizeof(line) - pos, ",%s", s.def.name);
     pos += snprintf(line + pos, sizeof(line) - pos, ",Lat,Lon,Speed");
+    if (pos >= sizeof(line) - 1) pos = sizeof(line) - 2;
     line[pos++] = '\n';
 
     pos += snprintf(line + pos, sizeof(line) - pos, "%llu",
@@ -435,8 +442,9 @@ void Logger::send_log_snapshot() {
     for (auto &s : can_states_)
         for (const auto &sig : s.def.signals) {
             if (sig.processing != nullptr) {
+                // Apply sig.offset so the lambda receives the same slice as log_sample.
                 pos += snprintf(line + pos, sizeof(line) - pos,
-                                ",%s", sig.processing(s.data, s.data_len).c_str());
+                                ",%s", sig.processing(s.data + sig.offset, sig.len).c_str());
             } else {
                 pos += snprintf(line + pos, sizeof(line) - pos,
                                 ",%llu", extract(s.data, s.data_len, sig));
@@ -454,11 +462,13 @@ void Logger::send_log_snapshot() {
         }
     }
 
-    if (gnss_.state.satellites > 0) {
+    const auto gs = gnss_.get_state();
+    if (gs.satellites > 0) {
         pos += snprintf(line + pos, sizeof(line) - pos,
-            ",%f,%f,%lu", gnss_.state.fLat, gnss_.state.fLon, gnss_.state.gSpeed);
+            ",%f,%f,%ld", gs.fLat, gs.fLon, static_cast<long>(gs.gSpeed));
     }
 
+    if (pos >= sizeof(line) - 1) pos = sizeof(line) - 2;
     line[pos++] = '\n';
     ModuleCore::UartResponse resp{};
     resp.msg_type      = 0xA3; // MSG_SNAPSHOT
@@ -469,7 +479,7 @@ void Logger::send_log_snapshot() {
 }
 
 void Logger::write_header() {
-    char   line[512];
+    char   line[1024];
     size_t pos = snprintf(line, sizeof(line), "timestamp");
     for (auto &s : can_states_)
         for (const auto &sig : s.def.signals)
@@ -477,7 +487,8 @@ void Logger::write_header() {
     for (auto &s : adc_states_)
         pos += snprintf(line + pos, sizeof(line) - pos, ",%s", s.def.name);
 
-    pos += snprintf(line + pos, sizeof(line) - pos, "Lat,Lon,Speed");
+    pos += snprintf(line + pos, sizeof(line) - pos, ",Lat,Lon,Speed");
+    if (pos >= sizeof(line) - 1) pos = sizeof(line) - 2;
     line[pos++] = '\n';
     write_log(line, pos);
 }
@@ -495,7 +506,7 @@ esp_err_t Logger::init_adc(const AdcDriver::Config &config) {
     for (const auto &state : adc_states_) {
         ret = apply_adc_channel_config(state.def);
         if (ret != ESP_OK) {
-            adc_driver_.~AdcDriver();
+            adc_driver_.deinit();
             return ret;
         }
     }
@@ -532,7 +543,7 @@ uint64_t Logger::extract(const uint8_t *data, uint8_t data_len, const SignalSlic
 }
 
 void Logger::log_sample() {
-    char   line[512];
+    char   line[1024];
     size_t pos = snprintf(line, sizeof(line), "%llu",
                           static_cast<unsigned long long>(esp_timer_get_time() / 1000));
 
@@ -565,11 +576,13 @@ void Logger::log_sample() {
         }
     }
 
-    if (gnss_.state.satellites > 0) {
+    const auto gs = gnss_.get_state();
+    if (gs.satellites > 0) {
         pos += snprintf(line + pos, sizeof(line) - pos,
-            ",%f,%f,%lu", gnss_.state.fLat, gnss_.state.fLon, gnss_.state.gSpeed);
+            ",%f,%f,%ld", gs.fLat, gs.fLon, static_cast<long>(gs.gSpeed));
     }
 
+    if (pos >= sizeof(line) - 1) pos = sizeof(line) - 2;
     line[pos++] = '\n';
     write_log(line, pos);
 }
@@ -581,7 +594,7 @@ std::expected<void, ModuleCoreError> Logger::main() {
         vTaskDelay(pdMS_TO_TICKS(250));
     }
 
-    xTaskCreate(GNSS::uartTask, "GNSS", 4096, nullptr, 5, nullptr);
+    xTaskCreate(GNSS::uartTask, "GNSS", 4096, nullptr, 5, &gnss_.taskHandle);
 
     write_header();
 

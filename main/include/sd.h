@@ -30,7 +30,7 @@ public:
     esp_err_t init() {
         if (auto err = mount_card(); err != ESP_OK) return err;
 
-        for (const std::string& log : get_logs_list()) {
+        for (const std::string& log : get_logs_list_impl()) {
             std::cout << log << std::endl;
         }
 
@@ -94,17 +94,12 @@ public:
     }
 
     std::vector<std::string> get_logs_list() {
-        std::vector<std::string> result;
-        std::error_code ec;
-        for (const auto &entry: fs::directory_iterator(MOUNT_POINT, ec)) {
-            if (!ec && entry.is_regular_file(ec))
-                result.push_back(entry.path().filename().string());
-            ec.clear();
-        }
-        return result;
+        std::lock_guard lock(mutex_);
+        return get_logs_list_impl();
     }
 
     uint64_t get_file_size(const std::string &name) {
+        std::lock_guard lock(mutex_);
         std::error_code ec;
         auto sz = fs::file_size(fs::path(MOUNT_POINT) / name, ec);
         return ec ? 0 : static_cast<uint64_t>(sz);
@@ -149,6 +144,18 @@ private:
     std::array<char, SECTOR_SIZE> buf_{};
     size_t buf_len_ = 0;
 
+    // Called when mutex is held
+    static std::vector<std::string> get_logs_list_impl() {
+        std::vector<std::string> result;
+        std::error_code ec;
+        for (const auto &entry: fs::directory_iterator(MOUNT_POINT, ec)) {
+            if (!ec && entry.is_regular_file(ec))
+                result.push_back(entry.path().filename().string());
+            ec.clear();
+        }
+        return result;
+    }
+
     int extract_log_index(const std::string &name) {
         // Must be exactly "0000.csv"
         if (name.size() != 8) return -1;
@@ -157,7 +164,6 @@ private:
             // return -2;
 
         int value = 0;
-
         for (int i = 0; i < 4; i++) {
             if (name[i] < '0' || name[i] > '9') return -1;
             value = value * 10 + (name[i] - '0');
@@ -167,7 +173,7 @@ private:
     }
 
     int get_next_log_index() {
-        auto logs = get_logs_list();
+        auto logs = get_logs_list_impl();
 
         int max_index = 0; // start at 0000
         for (const auto &log: logs) {

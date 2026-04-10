@@ -228,7 +228,22 @@ bool GNSS::parseGNGGA(const char* sentence) {
 
     if (n < 6) return false;
 
-    state.fixType = static_cast<uint8_t>(quality);
+    float fLat = 0.0f, fLon = 0.0f;
+    if (strlen(lat_str) > 0 && lat_ns) {
+        float raw = atof(lat_str);
+        int   deg = static_cast<int>(raw / 100);
+        fLat = deg + (raw - deg * 100.0f) / 60.0f;
+        if (lat_ns == 'S') fLat = -fLat;
+    }
+    if (strlen(lon_str) > 0 && lon_ew) {
+        float raw = atof(lon_str);
+        int   deg = static_cast<int>(raw / 100);
+        fLon = deg + (raw - deg * 100.0f) / 60.0f;
+        if (lon_ew == 'W') fLon = -fLon;
+    }
+
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    state.fixType   = static_cast<uint8_t>(quality);
     state.satellites = satellites;
 
     if (strlen(time_str) >= 6) {
@@ -238,27 +253,15 @@ bool GNSS::parseGNGGA(const char* sentence) {
     }
 
     if (strlen(lat_str) > 0 && lat_ns) {
-        float raw  = atof(lat_str);
-        int   deg  = static_cast<int>(raw / 100);
-        float mins = raw - deg * 100.0f;
-        state.fLat = deg + mins / 60.0f;
-        if (lat_ns == 'S') state.fLat = -state.fLat;
-        state.lat = static_cast<int32_t>(state.fLat * 10000000);
+        state.fLat = fLat;
+        state.lat  = static_cast<int32_t>(fLat * 10000000);
     }
-
     if (strlen(lon_str) > 0 && lon_ew) {
-        float raw  = atof(lon_str);
-        int   deg  = static_cast<int>(raw / 100);
-        float mins = raw - deg * 100.0f;
-        state.fLon = deg + mins / 60.0f;
-        if (lon_ew == 'W') state.fLon = -state.fLon;
-        state.lon = static_cast<int32_t>(state.fLon * 10000000);
+        state.fLon = fLon;
+        state.lon  = static_cast<int32_t>(fLon * 10000000);
     }
-
     state.hMSL = static_cast<int32_t>(altitude);
 
-    // ESP_LOGI(TAG, "GGA fix=%d sats=%d lat=%.6f lon=%.6f alt=%.1fm",
-             // quality, satellites, state.fLat, state.fLon, altitude);
     return true;
 }
 
@@ -274,6 +277,9 @@ bool GNSS::parseGNRMC(const char* sentence) {
 
     if (n < 9) return false;
 
+    bool active = (status == 'A');
+
+    std::lock_guard<std::mutex> lock(state_mutex_);
     if (strlen(date_str) >= 6) {
         state.day   = (date_str[0] - '0') * 10 + (date_str[1] - '0');
         state.month = (date_str[2] - '0') * 10 + (date_str[3] - '0');
@@ -282,8 +288,6 @@ bool GNSS::parseGNRMC(const char* sentence) {
 
     state.gSpeed  = static_cast<int32_t>(speed * 1.151f); // knots → mph
     state.headMot = static_cast<int32_t>(course);
-
-    bool active = (status == 'A');
 
     ESP_LOGI(TAG, "RMC status=%c speed=%.1fkn course=%.1f° date=%02d/%02d/%04d",
              status, speed, course, state.day, state.month, state.year);

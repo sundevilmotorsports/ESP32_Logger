@@ -16,7 +16,7 @@
 #include <iostream>
 #include "gnss.h"
 
-static ModuleCore g_module;
+extern ModuleCore g_module;
 
 class Logger {
 public:

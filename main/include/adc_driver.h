@@ -23,6 +23,7 @@ public:
     AdcDriver &operator=(AdcDriver &&) = delete;
 
     esp_err_t init(const Config &config);
+    esp_err_t deinit();
     esp_err_t config_channel(Channel channel);
     esp_err_t config_channel(Channel channel, const ChannelConfig &config);
     esp_err_t read(Channel channel, int *out_raw) const;
@@ -37,6 +38,7 @@ private:
     void reset_channel_commands();
     [[nodiscard]] bool is_valid_channel(Channel channel) const;
 
+    esp_err_t teardown_locked();
     esp_err_t validate_config() const;
     esp_err_t initialize_bus_if_needed();
     esp_err_t add_spi_device();

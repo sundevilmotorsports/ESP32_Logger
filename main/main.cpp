@@ -5,6 +5,8 @@
 
 using namespace std;
 
+ModuleCore g_module;
+
 static const char *TAG = "main";
 
 #define BLINK_PIN   GPIO_NUM_2

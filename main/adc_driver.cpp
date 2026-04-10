@@ -18,11 +18,9 @@ CommandBytes make_custom_command(const ext::spi_adc::ChannelConfig &config) {
 
 }  // namespace
 
-AdcDriver::~AdcDriver() {
-    std::lock_guard<std::mutex> lock(mutex_);
-
+esp_err_t AdcDriver::teardown_locked() {
     if (!initialized_) {
-        return;
+        return ESP_ERR_INVALID_STATE;
     }
 
     esp_err_t ret = ESP_OK;
@@ -37,6 +35,19 @@ AdcDriver::~AdcDriver() {
 
     configured_.fill(false);
     initialized_ = false;
+    return ret;
+}
+
+esp_err_t AdcDriver::deinit() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return teardown_locked();
+}
+
+AdcDriver::~AdcDriver() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (initialized_) {
+        teardown_locked();
+    }
 }
 
 esp_err_t AdcDriver::init(const Config &config) {

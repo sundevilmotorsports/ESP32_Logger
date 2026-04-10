@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
+#include <string>
 
 struct AdcDeviceDef {
     const char *name = nullptr;
