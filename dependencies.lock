@@ -1,0 +1,14 @@
+dependencies:
+  idf:
+    source:
+      type: idf
+<<<<<<< HEAD:logger/dependencies.lock
+    version: 6.0.0
+=======
+    version: 5.5.0
+>>>>>>> origin/wft_logging_dev:dependencies.lock
+direct_dependencies:
+- idf
+manifest_hash: e44bf68eca6b7b264ddae08cd014cd3294c0473230381b6d6f88ed18ec879038
+target: esp32s3
+version: 2.0.0
