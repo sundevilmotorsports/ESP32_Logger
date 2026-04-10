@@ -6,8 +6,13 @@
 #include "wifi.h"
 
 static const char *TAG = "WIFI_AP";
+static bool wifi_initialized = false;
 
 void wifi_init(void) {
+    if(wifi_initialized) {
+        return;
+    }
+    
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -24,10 +29,10 @@ void wifi_init(void) {
 
     wifi_config_t wifi_config = {
         .ap = {
-            .ssid = "data-logger",
-            .ssid_len = strlen("data-logger"),
+            .ssid = "sdm26_logger",
+            .ssid_len = strlen("sdm26_logger"),
             .channel = 1,
-            .password = "sdmfsae123",
+            .password = "sdmfsae26",
             .max_connection = 4,
             .authmode = WIFI_AUTH_WPA2_PSK,
         },
@@ -37,5 +42,7 @@ void wifi_init(void) {
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    ESP_LOGI(TAG, "Wi-Fi SoftAP Finished. SSID: %s Password: %s", "data-logger", "sdmfsae123");
+    ESP_LOGI(TAG, "Wi-Fi SoftAP Finished. SSID: %s Password: %s", "sdm26_logger", "sdmfsae26");
+
+    wifi_initialized = true;
 }

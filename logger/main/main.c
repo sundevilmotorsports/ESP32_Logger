@@ -367,20 +367,34 @@ void logBuffer_task(void *pvParamaters){
     }
 }
 
+esp_err_t start_server() {
+    // start wifi
+    wifi_init();
+
+    // start http server
+    if(http_server_start() == ESP_OK) {
+        ESP_LOGI(TAG, "Server started");
+        ESP_LOGI(TAG, "Connect to Wi-Fi 'data-logger' and visit: http://192.168.4.1/api/view");
+        return ESP_OK;
+    }
+
+    ESP_LOGI(TAG, "Failed to start server");
+    return ESP_FAIL;
+}
 
 void app_main(void)
 {
     esp_log_level_set("GNSS_DMA", ESP_LOG_DEBUG);
+    bool server_started_once = false;
 
-    
 
     log_ring = log_ring_create((size_t)CH_COUNT, (size_t)RING_CAP);
     if (log_ring == NULL) {
         ESP_LOGE(TAG, "Failed to create log ring buffer");
         return;
     }
-
     
+
     // Initialize UART
     sdcard_init();
     gnss_init();
@@ -390,18 +404,6 @@ void app_main(void)
     adc_init();
     can_init(process_can_message);
 
-    // start wifi
-    wifi_init();
-
-    // start http server
-    if(http_server_start() == ESP_OK) {
-        ESP_LOGI(TAG, "Server started");
-        ESP_LOGI(TAG, "Connect to Wi-Fi 'data-logger' and visit: http://192.168.4.1/api/view");
-    }
-    else {
-        ESP_LOGI(TAG, "Failed to start server");
-    }
-
     if (tasks_start_all() != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start RTOS tasks");
         return;
@@ -409,9 +411,18 @@ void app_main(void)
     
     // Show welcome message and help
     vTaskDelay(pdMS_TO_TICKS(500)); // Wait for tasks to start
+
     // Main loop - keep system alive
     while(1) {
         vTaskDelay(pdMS_TO_TICKS(5000));
+
+        if (can_msg_count == 0 && !http_server_is_running() && !server_started_once) {
+            if (start_server() == ESP_OK) {
+                server_started_once = true;
+            }
+        }
+
+        auto_server_stop();
         // ESP_LOGI(TAG, "System heartbeat - Free heap: %ld bytes", esp_get_free_heap_size());
     }
 }

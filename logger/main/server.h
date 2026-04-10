@@ -1,6 +1,6 @@
 #ifndef SERVER_H
 #define SERVER_H
-#endif
+
 
 #include <esp_http_server.h>
 #include <esp_log.h>
@@ -16,3 +16,11 @@ esp_err_t http_server_start(void);
 
 // server stop
 void http_server_stop(void);
+
+// server auto stop
+void auto_server_stop();
+
+// server running status
+bool http_server_is_running();
+
+#endif

@@ -1,5 +1,6 @@
 #include <esp_http_server.h>
 #include <esp_log.h>
+
 #include <dirent.h>
 #include <errno.h>
 #include <stdbool.h>
@@ -10,13 +11,38 @@
 static const char *TAG = "HTTP_SERVER";
 static httpd_handle_t server = NULL;
 
-// basic json response handler for now
+// variables for auto stop
+uint64_t last_request_time = 0; 
+const uint64_t INACTIVITY_TIMEOUT = 5 * 60 * 1000000ULL;
+
+
+// verifies sd card path
+static bool is_valid_sdcard_path(const char *path) {
+    if (path == NULL) {
+        return false;
+    }
+    if (strncmp(path, "/sdcard", 7) != 0) {
+        return false;
+    }
+    if (!(path[7] == '\0' || path[7] == '/')) {
+        return false;
+    }
+    if (strstr(path, "..") != NULL) {
+        return false;
+    }
+    return true;
+}
+
+// status handler
 static esp_err_t status_get_handler(httpd_req_t *req) {
     const char* resp_str = "{\"status\": \"active\", \"msg\": \"data logger online\"}";
     httpd_resp_set_type(req, "application/json");
+    last_request_time = esp_timer_get_time();
+
     return httpd_resp_send(req, resp_str, strlen(resp_str));
 }
 
+// file view handler
 static esp_err_t file_view_handler(httpd_req_t *req) {
     char line[1024];
     char path[256];     
@@ -31,6 +57,11 @@ static esp_err_t file_view_handler(httpd_req_t *req) {
         if (httpd_query_key_value(query, "path", path, sizeof(path)) != ESP_OK) {
             strcpy(path, "/sdcard");
         }
+    }
+
+    if (!is_valid_sdcard_path(path)) {
+        ESP_LOGE(TAG, "Invalid view path: %s", path);
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid path");
     }
 
     DIR *dir = opendir(path);
@@ -85,6 +116,9 @@ static esp_err_t file_view_handler(httpd_req_t *req) {
     httpd_resp_sendstr_chunk(req, "</ul></body></html>");
     httpd_resp_sendstr_chunk(req, NULL);
     closedir(dir);
+
+    last_request_time = esp_timer_get_time();
+
     return ESP_OK;
 }
 
@@ -107,7 +141,10 @@ static esp_err_t file_download_handler(httpd_req_t *req) {
     httpd_req_get_url_query_str(req, full_req, sizeof(full_req));
 
     char filename[128];
-    httpd_query_key_value(full_req, "file", filename, sizeof(filename));
+    if (httpd_query_key_value(full_req, "file", filename, sizeof(filename)) != ESP_OK) {
+        ESP_LOGE(TAG, "Missing 'file' query parameter");
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing file parameter");
+    }
 
     char path[512];
     if (filename[0] == '/') {
@@ -117,6 +154,11 @@ static esp_err_t file_download_handler(httpd_req_t *req) {
         snprintf(path, sizeof(path), "/sdcard/%s", filename);
     }
 
+    if (!is_valid_sdcard_path(path)) {
+        ESP_LOGE(TAG, "Invalid download path: %s", path);
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid file path");
+    }
+
     // open files for reading
     FILE *file = fopen(path, "rb");
 
@@ -124,6 +166,9 @@ static esp_err_t file_download_handler(httpd_req_t *req) {
         ESP_LOGE(TAG, "file not found");
         return httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "file not found");
     }
+
+    // update last request time
+    last_request_time = esp_timer_get_time();
 
     // http headers
     httpd_resp_set_type(req, "application/octet-stream");
@@ -140,6 +185,8 @@ static esp_err_t file_download_handler(httpd_req_t *req) {
 
     // file reading
     while((chunk_size = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        last_request_time = esp_timer_get_time();
+
         if(httpd_resp_send_chunk(req, buffer, chunk_size) != ESP_OK) {
             ESP_LOGE(TAG, "Error sending file");
             fclose(file);
@@ -149,6 +196,7 @@ static esp_err_t file_download_handler(httpd_req_t *req) {
 
     fclose(file);
     httpd_resp_send_chunk(req, NULL, 0);
+
     return ESP_OK;
 }
 
@@ -176,6 +224,10 @@ static const httpd_uri_t file_download_uri = {
 
 // manages server state 
 esp_err_t http_server_start(void) {
+    if(server != NULL) {
+        return ESP_OK;
+    }
+
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.stack_size = 8192;
     config.lru_purge_enable = true;
@@ -186,6 +238,9 @@ esp_err_t http_server_start(void) {
         httpd_register_uri_handler(server, &status_uri);
         httpd_register_uri_handler(server, &file_view_uri);
         httpd_register_uri_handler(server,&file_download_uri);
+
+        last_request_time = esp_timer_get_time();
+
         return ESP_OK;
     }
     return ESP_FAIL;
@@ -193,8 +248,30 @@ esp_err_t http_server_start(void) {
 
 // stops server
 void http_server_stop(void) {
-    if (server) {
+    if (!server) {
+        return;
+    }
+
+    else {
         httpd_stop(server);
         server = NULL;
     }
+}
+
+// auto stops after 5 mins of inactivity
+void auto_server_stop() {
+    if (!server) {
+        return;
+    }
+
+    uint64_t now = esp_timer_get_time();
+
+    if((now - last_request_time) >= INACTIVITY_TIMEOUT) {
+        ESP_LOGI(TAG, "Stopping server due to inactivity.");
+        http_server_stop();
+    }
+}
+
+bool http_server_is_running() {
+    return server != NULL;
 }
