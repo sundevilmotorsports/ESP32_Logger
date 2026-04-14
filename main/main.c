@@ -24,6 +24,13 @@
 #define REFRESH_MS 10
 #define RING_CAP 256
 
+#define ENGINE_STREAM_ID_2 1000U
+#define ENGINE_STREAM_ID_3 64U
+#define ENGINE_STREAM_ID_5 1001U
+#define ENGINE_STREAM_ID_6 1002U
+#define ENGINE_STREAM_ID_7 1003U
+#define ENGINE_STREAM_ID_8 1004U
+
 log_ring_t *log_ring;
 TaskHandle_t log_flush_task_handle = NULL;
 static uint8_t log_flush_staging[RING_CAP * CH_COUNT];
@@ -35,11 +42,7 @@ const char compileDateTime[] = __DATE__ " " __TIME__;
 
 static const char *TAG = "MAIN_APP";
 
-typedef struct{
-    uint16_t ambTemp;
-    uint16_t objTemp;
-    uint16_t rpm;
-} wheel_data_s_t;
+
 
 // Logging variables
 // CAN Tx buffer - unimplemented
@@ -58,16 +61,18 @@ uint8_t testNo = 0;
 uint8_t canFifoFull = 0;
 uint8_t drs = 0;
 uint16_t brakeFluid = 0, throttleLoad = 0, brakeLoad = 0;
-uint16_t oilPress = 0, driven_wspd = 0;
-uint8_t ect = 0, tps = 0, aps = 0, shift0 = 0, shift1 = 0, shift2 = 0;
+
+engine_t engine;
 
 imu_accel_t imu_accel;
 imu_gyro_t imu_gyro;
 
-SLIP_t SLIP;
-WFT_CAN1_t WFT_1;
-WFT_CAN2_t WFT_2;
-WFT_CAN3_t WFT_3;
+
+// Old WFT Handlers
+// SLIP_t SLIP;
+// WFT_CAN1_t WFT_1;
+// WFT_CAN2_t WFT_2;
+// WFT_CAN3_t WFT_3;
 
 static void process_can_message(twai_frame_t *message)
 {
@@ -81,59 +86,48 @@ static void process_can_message(twai_frame_t *message)
     memcpy(data, message->buffer, copy_len);
 
     switch (message->header.id){
-    //Slip Angles
-    case 0x1:
-        SLIP.POS1 = data[0] | (data[1] << 8);
-        break;
-    case 0x2:
-        SLIP.POS2 = data[0] | (data[1] << 8);
-        break;
-    case 0x3:
-        SLIP.POS3 = data[0] | (data[1] << 8);
-        break;
-    case 0x4:
-        SLIP.POS4 = data[0] | (data[1] << 8);
-        break;
-    case 0x5:
-        SLIP.POS5 = data[0] | (data[1] << 8);
-        break;
-    case 0x6:
-        SLIP.POS6 = data[0] | (data[1] << 8);
-        break;
-    case 0x21:
-        WFT_1.Fx_Force = data[0] | (data[1] << 8);
-        WFT_1.Fy_Force = data[2] | (data[3] << 8);
-        WFT_1.Fz_Force = data[4] | (data[5] << 8);
-        WFT_1.Mx_Moment = data[6] | (data[7] << 8);
-        // printf("WFT Fx: %d, Fy: %d\n", Fx, Fy);
-        break;
+    //Old WFT Handlers
+    // //Slip Angles
+    // case 0x1:
+    //     SLIP.POS1 = data[0] | (data[1] << 8);
+    //     break;
+    // case 0x2:
+    //     SLIP.POS2 = data[0] | (data[1] << 8);
+    //     break;
+    // case 0x3:
+    //     SLIP.POS3 = data[0] | (data[1] << 8);
+    //     break;
+    // case 0x4:
+    //     SLIP.POS4 = data[0] | (data[1] << 8);
+    //     break;
+    // case 0x5:
+    //     SLIP.POS5 = data[0] | (data[1] << 8);
+    //     break;
+    // case 0x6:
+    //     SLIP.POS6 = data[0] | (data[1] << 8);
+    //     break;
+    // case 0x21:
+    //     WFT_1.Fx_Force = data[0] | (data[1] << 8);
+    //     WFT_1.Fy_Force = data[2] | (data[3] << 8);
+    //     WFT_1.Fz_Force = data[4] | (data[5] << 8);
+    //     WFT_1.Mx_Moment = data[6] | (data[7] << 8);
+    //     // printf("WFT Fx: %d, Fy: %d\n", Fx, Fy);
+    //     break;
 
-    case 0x22:
-        WFT_2.My_Moment = data[0] | (data[1] << 8);
-        WFT_2.Mz_Moment = data[2] | (data[3] << 8);
-        WFT_2.Wheelspeed = data[4] | (data[5] << 8);
-        WFT_2.Position = data[6] | (data[7] << 8);
-        //printf("WFT Fz: %d, Mx: %d\n", Fz, Mx);
-        break;
+    // case 0x22:
+    //     WFT_2.My_Moment = data[0] | (data[1] << 8);
+    //     WFT_2.Mz_Moment = data[2] | (data[3] << 8);
+    //     WFT_2.Wheelspeed = data[4] | (data[5] << 8);
+    //     WFT_2.Position = data[6] | (data[7] << 8);
+    //     //printf("WFT Fz: %d, Mx: %d\n", Fz, Mx);
+    //     break;
 
-    case 0x23:
-        WFT_3.X_Acceleration = data[0] | (data[1] << 8);
-        WFT_3.Y_Acceleration = data[1] | (data[2] << 8);
-        WFT_3.Z_Acceleration = data[3] | (data[4] << 8);
-        // printf("WFT My: %d, Mz: %d\n", My, Mz);
-        break;
-
-    case 0x40:
-        // Shifter Data
-        shift0 = data[0];
-        shift1 = data[1];
-        shift2 = data[2];
-        if ((shift1 != 1) | (shift2 != 1)){
-            TXDAT[1] = shift1;
-            TXDAT[2] = shift2;
-        }
-        DTC_CAN_Response_Measurement(dtc_devices[shifter_DTC], pdMS_TO_TICKS(xTaskGetTickCount()));
-        break;
+    // case 0x23:
+    //     WFT_3.X_Acceleration = data[0] | (data[1] << 8);
+    //     WFT_3.Y_Acceleration = data[1] | (data[2] << 8);
+    //     WFT_3.Z_Acceleration = data[3] | (data[4] << 8);
+    //     // printf("WFT My: %d, Mz: %d\n", My, Mz);
+    //     break;
 
     case 0x35F:
         drs = data[0];
@@ -221,29 +215,53 @@ static void process_can_message(twai_frame_t *message)
         memcpy(data, &rlt.tiretemp2, sizeof(rlt.tiretemp2));
         break;
 
-    case 0x3e8:
+    case ENGINE_STREAM_ID_2:
         // Engine CAN Stream 2
         switch (data[0]){
         // Frame 1
         case 0x0:
-            // engine_speed = message->data[1] << 8 | message->data[2];
-            ect = data[3];
-            // oilTemp = message->data[4];
-            oilPress = data[5] << 8 | data[6];
-            // TODO: Could also add Park/Neutral Status (Stored on message->data[7])
+            engine.engine_speed = data[1] << 8 | data[2];
+            engine.ect = data[3];
+            engine.oil_temperature = data[4];
+            engine.oil_pressure = data[5] << 8 | data[6];
             break;
 
         case 0x1:
-            tps = data[2];
-            driven_wspd = data[4] << 8 | data[5];
+            engine.lambda1 = data[1];
+            engine.tps = data[2];
+            engine.gear = data[3];
+            engine.gp_speed1 = data[4] << 8 | data[5];
             break;
 
         case 0x2:
-            aps = data[1];
+            engine.aps_main = data[1];
+            engine.fuel_pressure = data[2] << 8 | data[3];
             break;
         }
         break;
+
+    case ENGINE_STREAM_ID_6:
+        switch (data[0]){
+            case 0x0:
+                engine.map = data[5] << 8 | data[6];
+                break;
+        }
+        break;
     
+    case ENGINE_STREAM_ID_7:
+        switch (data[0]){
+            case 0x0:
+                engine.an_temp_3 = data[5];
+                break;
+        }
+        break;
+    
+    case ENGINE_STREAM_ID_8:
+        engine.imu_accel_x = data[0] << 8 | data[1];
+        engine.imu_accel_y = data[2] << 8 | data[3];
+        engine.imu_accel_z = data[4] << 8 | data[5];
+        break;
+
     case 0x4e2:
         // Front Left String Gauge
         flsg = data[0] << 8 | data[1];
@@ -409,7 +427,7 @@ void logBuffer_task(void *pvParamaters)
         loggerEmplaceU64(logBuffer, RLT_TTA, rlt.tiretemp1);
         loggerEmplaceU64(logBuffer, RLT_TTB, rlt.tiretemp2);
 
-        // Report String Gauge Data
+        // Report Strain Gauge Data
         loggerEmplaceU16(logBuffer, FR_SG, frsg);
         loggerEmplaceU16(logBuffer, FL_SG, flsg);
         loggerEmplaceU16(logBuffer, RR_SG, rrsg);
@@ -421,11 +439,24 @@ void logBuffer_task(void *pvParamaters)
         loggerEmplaceU16(logBuffer, BRAKE_LOAD, brakeLoad);
 
         // Report ECU Data
-        loggerEmplaceU16(logBuffer, DRIVEN_WSPD, driven_wspd);
-        loggerEmplaceU16(logBuffer, OIL_PSR, oilPress);
-        logBuffer[TPS] = tps;
-        logBuffer[ECT] = ect;
-        logBuffer[APS] = aps;
+        loggerEmplaceU16(logBuffer, ENGINE_SPEED, engine.engine_speed);
+        logBuffer[ECT] = engine.ect;
+        logBuffer[OIL_TEMP] = engine.oil_temperature;
+        loggerEmplaceU16(logBuffer, OIL_PRESS, engine.oil_pressure);
+        logBuffer[NEUTRAL_STAT] = engine.neutral_stat;
+        logBuffer[LAMBDA] = engine.lambda1;
+        logBuffer[TPS] = engine.tps;
+        logBuffer[GEAR] = engine.gear;
+        loggerEmplaceU16(logBuffer, GP_SPEED, engine.gp_speed1);
+        loggerEmplaceU16(logBuffer, APS_MAIN, engine.aps_main);
+        loggerEmplaceU16(logBuffer, FUEL_PRESS, engine.fuel_pressure);
+        loggerEmplaceU16(logBuffer, ACCEL_FUEL, engine.accel_fuel);
+        loggerEmplaceU16(logBuffer, ACCUM_DIST, engine.accumulated_dist);
+        loggerEmplaceU16(logBuffer, MAP, engine.map);
+        logBuffer[AN_TEMP_3_] = engine.an_temp_3;
+        loggerEmplaceU16(logBuffer, ENG_IMU_X, engine.imu_accel_x);
+        loggerEmplaceU16(logBuffer, ENG_IMU_Y, engine.imu_accel_y);
+        loggerEmplaceU16(logBuffer, ENG_IMU_Z, engine.imu_accel_z);
 
         // Report DTC Data
         logBuffer[DTC_FLW] = dtc_devices[flWheelBoard_DTC]->errState;
@@ -447,28 +478,29 @@ void logBuffer_task(void *pvParamaters)
         loggerEmplaceU32(logBuffer, GPS_SPD, GNSS_Handle.gSpeed);
         logBuffer[GPS_FIX] = GNSS_Handle.fixType;
 
+        // Old WFT Handlers
         //Slip Angle Log Emplace
-        loggerEmplaceU16(logBuffer, SLIP_ANG_1_, SLIP.POS1);
-        loggerEmplaceU16(logBuffer, SLIP_ANG_2_, SLIP.POS2);
-        loggerEmplaceU16(logBuffer, SLIP_ANG_3_, SLIP.POS3);
-        loggerEmplaceU16(logBuffer, SLIP_ANG_4_, SLIP.POS4);
-        loggerEmplaceU16(logBuffer, SLIP_ANG_5_, SLIP.POS5);
-        loggerEmplaceU16(logBuffer, SLIP_ANG_6_, SLIP.POS6);
+        // loggerEmplaceU16(logBuffer, SLIP_ANG_1_, SLIP.POS1);
+        // loggerEmplaceU16(logBuffer, SLIP_ANG_2_, SLIP.POS2);
+        // loggerEmplaceU16(logBuffer, SLIP_ANG_3_, SLIP.POS3);
+        // loggerEmplaceU16(logBuffer, SLIP_ANG_4_, SLIP.POS4);
+        // loggerEmplaceU16(logBuffer, SLIP_ANG_5_, SLIP.POS5);
+        // loggerEmplaceU16(logBuffer, SLIP_ANG_6_, SLIP.POS6);
 
 
-        loggerEmplaceU16(logBuffer, WFT_FX_Force, WFT_1.Fx_Force);
-        loggerEmplaceU16(logBuffer, WFT_FY_Force, WFT_1.Fx_Force);
-        loggerEmplaceU16(logBuffer, WFT_FZ_Force, WFT_1.Fx_Force);
-        loggerEmplaceU16(logBuffer, WFT_MX_Moment, WFT_1.Mx_Moment);
+        // loggerEmplaceU16(logBuffer, WFT_FX_Force, WFT_1.Fx_Force);
+        // loggerEmplaceU16(logBuffer, WFT_FY_Force, WFT_1.Fx_Force);
+        // loggerEmplaceU16(logBuffer, WFT_FZ_Force, WFT_1.Fx_Force);
+        // loggerEmplaceU16(logBuffer, WFT_MX_Moment, WFT_1.Mx_Moment);
 
-        loggerEmplaceU16(logBuffer,WFT_MY_Force,WFT_2.My_Moment);
-        loggerEmplaceU16(logBuffer,WFT_MZ_Force,WFT_2.Mz_Moment);
-        loggerEmplaceU16(logBuffer,WFT_Wheelspeed,WFT_2.Wheelspeed);
-        loggerEmplaceU16(logBuffer,WFT_Position,WFT_2.Position);
+        // loggerEmplaceU16(logBuffer,WFT_MY_Force,WFT_2.My_Moment);
+        // loggerEmplaceU16(logBuffer,WFT_MZ_Force,WFT_2.Mz_Moment);
+        // loggerEmplaceU16(logBuffer,WFT_Wheelspeed,WFT_2.Wheelspeed);
+        // loggerEmplaceU16(logBuffer,WFT_Position,WFT_2.Position);
 
-        loggerEmplaceU16(logBuffer,WFT_X_Acceleration,WFT_3.X_Acceleration);
-        loggerEmplaceU16(logBuffer,WFT_Y_Acceleration,WFT_3.Y_Acceleration);
-        loggerEmplaceU16(logBuffer,WFT_Z_Acceleration,WFT_3.Z_Acceleration);
+        // loggerEmplaceU16(logBuffer,WFT_X_Acceleration,WFT_3.X_Acceleration);
+        // loggerEmplaceU16(logBuffer,WFT_Y_Acceleration,WFT_3.Y_Acceleration);
+        // loggerEmplaceU16(logBuffer,WFT_Z_Acceleration,WFT_3.Z_Acceleration);
 
         // // Write Data to SD Card - mutex handling is internal
         // esp_err_t result = fast_log_buffer(logBuffer, CH_COUNT);

@@ -96,13 +96,35 @@
     X(GPS_SPD2) \
     X(GPS_SPD3) \
     X(GPS_FIX) \
+    X(ENGINE_SPEED) \
+    X(ENGINE_SPEED1) \
     X(ECT) \
-    X(OIL_PSR) \
-    X(OIL_PSR1) \
+    X(OIL_TEMP) \
+    X(OIL_PRESS) \
+    X(OIL_PRESS1) \
+    X(NEUTRAL_STAT) \
+    X(LAMBDA) \
     X(TPS) \
-    X(APS) \
-    X(DRIVEN_WSPD) \
-    X(DRIVEN_WSPD1) \
+    X(GEAR) \
+    X(GP_SPEED) \
+    X(GP_SPEED1) \
+    X(APS_MAIN) \
+    X(APS_MAIN1) \
+    X(FUEL_PRESS) \
+    X(FUEL_PRESS1) \
+    X(ACCEL_FUEL) \
+    X(ACCEL_FUEL1) \
+    X(ACCUM_DIST) \
+    X(ACCUM_DIST1) \
+    X(MAP) \
+    X(MAP1) \
+    X(AN_TEMP_3_) \
+    X(ENG_IMU_X) \
+    X(ENG_IMU_X1) \
+    X(ENG_IMU_Y) \
+    X(ENG_IMU_Y1) \
+    X(ENG_IMU_Z) \
+    X(ENG_IMU_Z1) \
     X(TESTNO) \
     X(DTC_FLW) \
     X(DTC_FRW) \
@@ -115,40 +137,6 @@
     X(DTC_IMU) \
     X(GPS_0_) \
     X(GPS_1_) \
-    X(SLIP_ANG_1_) \
-    X(SLIP_ANG_1_1) \
-    X(SLIP_ANG_2_) \
-    X(SLIP_ANG_2_1) \
-    X(SLIP_ANG_3_) \
-    X(SLIP_ANG_3_1) \
-    X(SLIP_ANG_4_) \
-    X(SLIP_ANG_4_1) \
-    X(SLIP_ANG_5_) \
-    X(SLIP_ANG_5_1) \
-    X(SLIP_ANG_6_) \
-    X(SLIP_ANG_6_1) \
-    X(WFT_FX_Force) \ 
-    X(WFT_FX_Force1) \
-    X(WFT_FY_Force) \
-    X(WFT_FY_Force1) \
-    X(WFT_FZ_Force) \
-    X(WFT_FZ_Force1) \
-    X(WFT_MX_Moment) \
-    X(WFT_MX_Moment1) \
-    X(WFT_MY_Force) \
-    X(WFT_MY_Force1) \
-    X(WFT_MZ_Force) \
-    X(WFT_MZ_Force1) \
-    X(WFT_Wheelspeed) \
-    X(WFT_Wheelspeed1) \
-    X(WFT_Position) \
-    X(WFT_Position1) \
-    X(WFT_X_Acceleration) \
-    X(WFT_X_Acceleration1) \
-    X(WFT_Y_Acceleration) \
-    X(WFT_Y_Acceleration1) \
-    X(WFT_Z_Acceleration) \
-    X(WFT_Z_Acceleration1) \
     X(FLT_TTA) \
     X(FLT_TTA1) \
     X(FLT_TTA2) \
@@ -215,6 +203,45 @@
     X(RRT_TTB7) \
     X(CH_COUNT)
 
+/*
+*** OLD WFT HANDLERS *** 
+    X(SLIP_ANG_1_) \
+    X(SLIP_ANG_1_1) \
+    X(SLIP_ANG_2_) \
+    X(SLIP_ANG_2_1) \
+    X(SLIP_ANG_3_) \
+    X(SLIP_ANG_3_1) \
+    X(SLIP_ANG_4_) \
+    X(SLIP_ANG_4_1) \
+    X(SLIP_ANG_5_) \
+    X(SLIP_ANG_5_1) \
+    X(SLIP_ANG_6_) \
+    X(SLIP_ANG_6_1) \
+    X(WFT_FX_Force) \ 
+    X(WFT_FX_Force1) \
+    X(WFT_FY_Force) \
+    X(WFT_FY_Force1) \
+    X(WFT_FZ_Force) \
+    X(WFT_FZ_Force1) \
+    X(WFT_MX_Moment) \
+    X(WFT_MX_Moment1) \
+    X(WFT_MY_Force) \
+    X(WFT_MY_Force1) \
+    X(WFT_MZ_Force) \
+    X(WFT_MZ_Force1) \
+    X(WFT_Wheelspeed) \
+    X(WFT_Wheelspeed1) \
+    X(WFT_Position) \
+    X(WFT_Position1) \
+    X(WFT_X_Acceleration) \
+    X(WFT_X_Acceleration1) \
+    X(WFT_Y_Acceleration) \
+    X(WFT_Y_Acceleration1) \
+    X(WFT_Z_Acceleration) \
+    X(WFT_Z_Acceleration1) \
+*/
+
+
 // Generate the enum using the macro
 enum LogChannel {
     #define X(channel) channel,
@@ -236,48 +263,111 @@ typedef struct{
     int16_t z;
 } imu_gyro_t;
 
-typedef struct{
-    int16_t Fx_Force;
-    int16_t Fy_Force;
-    int16_t Fz_Force;
-    int16_t Mx_Moment;
-} WFT_CAN1_t;
 
-typedef struct{
-    int16_t My_Moment;
-    int16_t Mz_Moment;
-    int16_t Wheelspeed;
-    int16_t Position;
-} WFT_CAN2_t;
+// Old WFT Handlers
+// typedef struct{
+//     int16_t Fx_Force;
+//     int16_t Fy_Force;
+//     int16_t Fz_Force;
+//     int16_t Mx_Moment;
+// } WFT_CAN1_t;
 
-typedef struct{
-    int16_t X_Acceleration;
-    int16_t Y_Acceleration;
-    int16_t Z_Acceleration;
-} WFT_CAN3_t;
+// typedef struct{
+//     int16_t My_Moment;
+//     int16_t Mz_Moment;
+//     int16_t Wheelspeed;
+//     int16_t Position;
+// } WFT_CAN2_t;
+
+// typedef struct{
+//     int16_t X_Acceleration;
+//     int16_t Y_Acceleration;
+//     int16_t Z_Acceleration;
+// } WFT_CAN3_t;
 
 typedef struct{
     uint64_t tiretemp1;
     uint64_t tiretemp2;
 } tiretemp_data;
 
-typedef struct{
-    int16_t POS1;
-    int16_t POS2;
-    int16_t POS3;
-    int16_t POS4;
-    int16_t POS5;
-    int16_t POS6;
-} SLIP_t;
+// Old WFT Handlers
+// typedef struct{
+//     int16_t POS1;
+//     int16_t POS2;
+//     int16_t POS3;
+//     int16_t POS4;
+//     int16_t POS5;
+//     int16_t POS6;
+// } SLIP_t;
 
+typedef struct{
+    uint16_t ambTemp;
+    uint16_t objTemp;
+    uint16_t rpm;
+} wheel_data_s_t;
+
+typedef struct{
+    // const uint8_t stream_id_2 = 1000;
+    //Stream 2 Data:
+    //Frame 1
+    uint16_t engine_speed = 0;
+    uint8_t ect = 0;
+    uint8_t oil_temperature = 0;
+    uint16_t oil_pressure = 0;
+    uint8_t neutral_stat = 0;
+    //Frame 2
+    uint8_t lambda1 = 0; // Multiplier of 100
+    uint8_t tps = 0;
+    uint8_t gear = 0;
+    uint16_t gp_speed1 = 0;
+    //Frame 3
+    uint16_t aps_main = 0;
+    uint16_t fuel_pressure = 0;
+
+    //Stream 3 Data:
+    //Frame 1:
+    uint16_t accel_fuel = 0;
+    uint16_t accumulated_dist = 0;
+
+    // const uint8_t stream_id_5 = 1001;
+    //Stream 5 Data:
+    //Frame 1
+    //engine speed repeat
+    //tps repeat
+    //aps repeat
+    //lambda1 repeat
+
+    // const uint8_t stream_id_6 = 1002;
+    //Stream 6 Data:
+    //Frame 1
+    //oil pressure repeat
+    //fuel pressure repeat
+    uint16_t map = 0;
+
+    // const uint8_t stream_id_7 = 1003;
+    //Stream 7 Data:
+    //Frame 1
+    //ect repeat
+    uint8_t an_temp_3 = 0; //Raw measurement of Engine Oil Temperature?
+
+    //Stream 8 Data:
+    int16_t imu_accel_x = 0;
+    int16_t imu_accel_y = 0;
+    int16_t imu_accel_z = 0;
+
+
+} engine_t;
+
+extern engine_t engine;
 extern imu_accel_t imu_accel;
 extern imu_gyro_t  imu_gyro;
 extern tiretemp_data frt, flt, rlt, rrt;
-extern uint8_t ect, tps, aps, shift0, shift1, shift2;
-extern WFT_CAN1_t WFT_1;
-extern WFT_CAN2_t WFT_2;
-extern WFT_CAN3_t WFT_3;
-extern SLIP_t SLIP;
+
+// Old WFT Handlers
+// extern WFT_CAN1_t WFT_1;
+// extern WFT_CAN2_t WFT_2;
+// extern WFT_CAN3_t WFT_3;
+// extern SLIP_t SLIP;
 
 // Optional: Generate string names for debugging/logging
 #ifdef LOG_CHANNEL_NAMES
