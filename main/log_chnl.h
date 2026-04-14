@@ -310,24 +310,24 @@ typedef struct{
     // const uint8_t stream_id_2 = 1000;
     //Stream 2 Data:
     //Frame 1
-    uint16_t engine_speed = 0;
-    uint8_t ect = 0;
-    uint8_t oil_temperature = 0;
-    uint16_t oil_pressure = 0;
-    uint8_t neutral_stat = 0;
+    uint16_t engine_speed;
+    uint8_t ect;
+    uint8_t oil_temperature;
+    uint16_t oil_pressure;
+    uint8_t neutral_stat;
     //Frame 2
-    uint8_t lambda1 = 0; // Multiplier of 100
-    uint8_t tps = 0;
-    uint8_t gear = 0;
-    uint16_t gp_speed1 = 0;
+    uint8_t lambda1; // Multiplier of 100
+    uint8_t tps;
+    uint8_t gear;
+    uint16_t gp_speed1;
     //Frame 3
-    uint16_t aps_main = 0;
-    uint16_t fuel_pressure = 0;
+    uint16_t aps_main;
+    uint16_t fuel_pressure;
 
     //Stream 3 Data:
     //Frame 1:
-    uint16_t accel_fuel = 0;
-    uint16_t accumulated_dist = 0;
+    uint16_t accel_fuel;
+    uint16_t accumulated_dist;
 
     // const uint8_t stream_id_5 = 1001;
     //Stream 5 Data:
@@ -342,18 +342,18 @@ typedef struct{
     //Frame 1
     //oil pressure repeat
     //fuel pressure repeat
-    uint16_t map = 0;
+    uint16_t map;
 
     // const uint8_t stream_id_7 = 1003;
     //Stream 7 Data:
     //Frame 1
     //ect repeat
-    uint8_t an_temp_3 = 0; //Raw measurement of Engine Oil Temperature?
+    uint8_t an_temp_3; //Raw measurement of Engine Oil Temperature?
 
     //Stream 8 Data:
-    int16_t imu_accel_x = 0;
-    int16_t imu_accel_y = 0;
-    int16_t imu_accel_z = 0;
+    int16_t imu_accel_x;
+    int16_t imu_accel_y;
+    int16_t imu_accel_z;
 
 
 } engine_t;
