@@ -251,6 +251,49 @@ void uart_output_task(void *param) {
                         printf("DTC display is already starting/stopping...\n");
                     }
                     break;
+                
+                case 'e':
+                case 'E':
+                    printf(
+                        "=== Option E: Engine Diagnostics ===\n"
+                        "Engine Speed:      %u\n"
+                        "ECT:               %u\n"
+                        "Oil Temperature:   %u\n"
+                        "Oil Pressure:      %u\n"
+                        "Neutral Status:    %u\n"
+                        "Lambda1:           %u\n"
+                        "TPS:               %u\n"
+                        "Gear:              %u\n"
+                        "GP Speed 1:        %u\n"
+                        "APS Main:          %u\n"
+                        "Fuel Pressure:     %u\n"
+                        "Accel Fuel:        %u\n"
+                        "Accumulated Dist:  %u\n"
+                        "MAP:               %u\n"
+                        "AN Temp 3:         %u\n"
+                        "IMU Accel X:       %d\n"
+                        "IMU Accel Y:       %d\n"
+                        "IMU Accel Z:       %d\n",
+                        (unsigned int)engine.engine_speed,
+                        (unsigned int)engine.ect,
+                        (unsigned int)engine.oil_temperature,
+                        (unsigned int)engine.oil_pressure,
+                        (unsigned int)engine.neutral_stat,
+                        (unsigned int)engine.lambda1,
+                        (unsigned int)engine.tps,
+                        (unsigned int)engine.gear,
+                        (unsigned int)engine.gp_speed1,
+                        (unsigned int)engine.aps_main,
+                        (unsigned int)engine.fuel_pressure,
+                        (unsigned int)engine.accel_fuel,
+                        (unsigned int)engine.accumulated_dist,
+                        (unsigned int)engine.map,
+                        (unsigned int)engine.an_temp_3,
+                        (int)engine.imu_accel_x,
+                        (int)engine.imu_accel_y,
+                        (int)engine.imu_accel_z
+                    );
+                    break;
 
                 case 'f':
                 case 'F':
@@ -308,6 +351,7 @@ void uart_output_task(void *param) {
                     printf("A - Report analog values\n");
                     printf("C - CAN message debug\n");
                     printf("D - Toggle DTC info display\n");
+                    printf("E - Engine Data Display\n");
                     printf("F - Change log file name\n");
                     printf("G - Display GPS info\n");
                     printf("I - Increment log file number\n");

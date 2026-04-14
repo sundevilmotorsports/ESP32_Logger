@@ -236,6 +236,7 @@ static void process_can_message(twai_frame_t *message)
         case 0x2:
             engine.aps_main = data[1];
             engine.fuel_pressure = data[2] << 8 | data[3];
+            DTC_CAN_Response_Measurement(dtc_devices[engine_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
             break;
         }
         break;

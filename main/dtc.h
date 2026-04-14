@@ -37,22 +37,14 @@ typedef struct {
     X(flWheelBoard_DTC) \
     X(rrWheelBoard_DTC) \
     X(rlWheelBoard_DTC) \
-    X(fBrakePress_DTC) \
-    X(rBrakePress_DTC) \
-    X(steer_DTC) \
-    X(flShock_DTC) \
-    X(frShock_DTC) \
-    X(rlShock_DTC) \
-    X(rrShock_DTC) \
     X(flStrainGauge_DTC) \
     X(frStrainGauge_DTC) \
     X(rlStrainGauge_DTC) \
     X(rrStrainGauge_DTC) \
     X(imu_DTC) \
-    X(brakeNthrottle_DTC) \
     X(gps_0_DTC) \
     X(gps_1_DTC) \
-    X(shifter_DTC)
+    X(engine_DTC)
 
 
 
