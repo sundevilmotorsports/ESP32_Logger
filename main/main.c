@@ -18,6 +18,8 @@
 #include "log_chnl.h"
 #include "uart.h"
 #include "tasks.h"
+#include "wifi.h"
+#include "server.h"
 
 #define REFRESH_MS 10
 #define RING_CAP 256
@@ -492,7 +494,24 @@ void logBuffer_task(void *pvParamaters)
     }
 }
 
+esp_err_t start_server() {
+    // start wifi
+    wifi_init();
+
+    // start http server
+    if(http_server_start() == ESP_OK) {
+        ESP_LOGI(TAG, "Server started");
+        ESP_LOGI(TAG, "Connect to Wi-Fi 'data-logger' and visit: http://192.168.4.1/api/view");
+        return ESP_OK;
+    }
+
+    ESP_LOGI(TAG, "Failed to start server");
+    return ESP_FAIL;
+}
+
+
 void app_main(void){
+    bool server_started_once = false;
     esp_log_level_set("GNSS_DMA", ESP_LOG_DEBUG);
 
     log_ring = log_ring_create((size_t)CH_COUNT, (size_t)RING_CAP);
@@ -527,5 +546,13 @@ void app_main(void){
         // printf("Tire Temp FRT: %lld%lld RRT: %lld%lld\n", frt.tiretemp1, frt.tiretemp2, rrt.tiretemp1, rrt.tiretemp2);
         vTaskDelay(pdMS_TO_TICKS(5000));
         // ESP_LOGI(TAG, "System heartbeat - Free heap: %ld bytes", esp_get_free_heap_size());
+
+        if (can_msg_count == 0 && !http_server_is_running() && !server_started_once) {
+            if (start_server() == ESP_OK) {
+                server_started_once = true;
+            }
+        }
+
+        auto_server_stop();
     }
 }
