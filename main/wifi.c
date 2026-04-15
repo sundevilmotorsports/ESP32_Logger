@@ -33,7 +33,7 @@ void wifi_init(void) {
             .ssid_len = strlen("sdm26_logger"),
             .channel = 1,
             .password = "sdmfsae26",
-            .max_connection = 4,
+            .max_connection = 1,
             .authmode = WIFI_AUTH_WPA2_PSK,
         },
     };
