@@ -18,6 +18,15 @@
 
 extern ModuleCore g_module;
 
+enum class ColType : uint8_t {
+    UINT8  = 0x01,
+    UINT16 = 0x02,
+    UINT32 = 0x03,
+    UINT64 = 0x04,
+    INT32  = 0x05,
+    FLOAT  = 0x06,
+};
+
 class Logger {
 public:
     Logger();
@@ -49,14 +58,27 @@ private:
 
     SDCard sd_ {};
 
+    static ColType col_type_for_len(uint8_t len) {
+        switch (len) {
+            case 1:  return ColType::UINT8;
+            case 2:  return ColType::UINT16;
+            case 4:  return ColType::UINT32;
+            default: return ColType::UINT64;
+        }
+    }
+
+    std::vector<uint8_t> build_schema_bytes() const;
+
     void write_header();
+    void send_schema();
 
     esp_err_t apply_adc_channel_config(const AdcDeviceDef &def);
 
-    uint64_t extract(const uint8_t *data, uint8_t data_len, const SignalSlice &sig);
+    // If update_adc is true, reads fresh ADC values (only safe from the timer task).
+    size_t fill_data_row(uint8_t* row, bool update_adc);
 
-    void write_log(const char *buf, size_t len) {
-        esp_err_t ret = sd_.write(std::string_view{buf, len});
+    void write_log(const void* buf, size_t len) {
+        esp_err_t ret = sd_.write(buf, len);
         if (ret != ESP_OK) {
             ModuleCoreLogger::error("Failed to write to SD card: %s", esp_err_to_name(ret));
         }

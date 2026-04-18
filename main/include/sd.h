@@ -56,17 +56,19 @@ public:
         return open_log();
     }
 
-    esp_err_t write(std::string_view data) {
+    esp_err_t write(const void* data, size_t len) {
         std::lock_guard lock(mutex_);
         if (file_ == nullptr) return ESP_ERR_INVALID_STATE;
 
-        while (!data.empty()) {
-            const size_t space = SECTOR_SIZE - buf_len_;
-            const size_t to_copy = std::min(data.size(), space);
+        const char* src = static_cast<const char*>(data);
+        while (len > 0) {
+            const size_t space   = SECTOR_SIZE - buf_len_;
+            const size_t to_copy = std::min(len, space);
 
-            std::memcpy(buf_.data() + buf_len_, data.data(), to_copy);
+            std::memcpy(buf_.data() + buf_len_, src, to_copy);
             buf_len_ += to_copy;
-            data = data.substr(to_copy);
+            src      += to_copy;
+            len      -= to_copy;
 
             if (buf_len_ == SECTOR_SIZE) {
                 if (auto err = flush_buf(); err != ESP_OK) return err;
@@ -105,11 +107,11 @@ public:
         return ec ? 0 : static_cast<uint64_t>(sz);
     }
 
-    std::string get_current_name() const { return file_name_ + ".csv"; }
+    std::string get_current_name() const { return file_name_ + ".bin"; }
 
     void stream_current(size_t chunk_size, std::function<void(const uint8_t *, size_t)> cb) {
         sync();
-        std::ifstream f(fs::path(MOUNT_POINT) / (file_name_ + ".csv"), std::ios::binary);
+        std::ifstream f(fs::path(MOUNT_POINT) / (file_name_ + ".bin"), std::ios::binary);
         if (!f) return;
         std::vector<char> buf(chunk_size);
         while (true) {
@@ -157,11 +159,11 @@ private:
     }
 
     int extract_log_index(const std::string &name) {
-        // Must be exactly "0000.csv"
+        // Must be exactly "0000.bin"
         if (name.size() != 8) return -1;
 
-        // if (name[4] != '.' || name[5] != 'c' || name[6] != 's' || name[7] != 'v')
-            // return -2;
+        if (name[4] != '.' || name[5] != 'b' || name[6] != 'i' || name[7] != 'n')
+            return -1;
 
         int value = 0;
         for (int i = 0; i < 4; i++) {
@@ -196,7 +198,7 @@ private:
             return ESP_ERR_INVALID_ARG;
         }
 
-        const fs::path path = fs::path(MOUNT_POINT) / (file_name_ + ".csv");
+        const fs::path path = fs::path(MOUNT_POINT) / (file_name_ + ".bin");
 
         const std::string path_str = path.string();
 

@@ -10,7 +10,7 @@ struct SignalSlice {
     std::uint8_t offset;
     std::uint8_t len;
 
-    std::function<std::string(std::uint8_t*, std::uint8_t)> processing = nullptr;
+    std::function<float(std::uint8_t*, std::uint8_t)> processing = nullptr;
 };
 
 struct CanDeviceDef {

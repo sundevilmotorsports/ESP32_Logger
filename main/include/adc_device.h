@@ -9,7 +9,7 @@ struct AdcDeviceDef {
     std::uint8_t channel = 0;
     int command_msb = -1;
     std::uint8_t command_lsb = 0;
-    std::function<std::string(int)> processing = nullptr;
+    std::function<float(int)> processing = nullptr;
 
 };
 
