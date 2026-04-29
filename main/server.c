@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 static const char *TAG = "HTTP_SERVER";
 static httpd_handle_t server = NULL;
@@ -31,6 +32,23 @@ static bool is_valid_sdcard_path(const char *path) {
         return false;
     }
     return true;
+}
+
+static void format_file_size(off_t size, char *buffer, size_t buffer_size) {
+    const char *units[] = {"B", "KB", "MB", "GB"};
+    double scaled_size = (double)size;
+    size_t unit_index = 0;
+
+    while (scaled_size >= 1024.0 && unit_index < (sizeof(units) / sizeof(units[0])) - 1) {
+        scaled_size /= 1024.0;
+        unit_index++;
+    }
+
+    if (unit_index == 0) {
+        snprintf(buffer, buffer_size, "%lld %s", (long long)size, units[unit_index]);
+    } else {
+        snprintf(buffer, buffer_size, "%.1f %s", scaled_size, units[unit_index]);
+    }
 }
 
 // status handler
@@ -89,13 +107,15 @@ static esp_err_t file_view_handler(httpd_req_t *req) {
             snprintf(child_path, sizeof(child_path), "%s/%s", path, content->d_name);
         }
 
+        struct stat st;
+        bool has_stat = stat(child_path, &st) == 0;
+
         // Check file type
         bool is_dir = false;
         if (content->d_type == DT_DIR) {
             is_dir = true;
         } else if (content->d_type == DT_UNKNOWN) {
-            struct stat st;
-            if (stat(child_path, &st) == 0) {
+            if (has_stat) {
                 if (S_ISDIR(st.st_mode)) is_dir = true;
             }
         }
@@ -106,9 +126,16 @@ static esp_err_t file_view_handler(httpd_req_t *req) {
                 "<li><strong>[DIR]</strong> <a href=\"/api/view?path=%s\">%s/</a></li>",
                 child_path, content->d_name);
         } else {
+            char file_size[32];
+            if (has_stat) {
+                format_file_size(st.st_size, file_size, sizeof(file_size));
+            } else {
+                snprintf(file_size, sizeof(file_size), "size unavailable");
+            }
+
             snprintf(line, sizeof(line), 
-                "<li><a href=\"/api/download?file=%s\">%s</a></li>", 
-                child_path, content->d_name);
+                "<li><a href=\"/api/download?file=%s\">%s</a> (%s)</li>",
+                child_path, content->d_name, file_size);
         }
         httpd_resp_sendstr_chunk(req, line);
     }
