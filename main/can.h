@@ -17,7 +17,6 @@ typedef struct {
 // Callback function type for message processing
 typedef void (*can_message_callback_t)(twai_frame_t *message);
 
-
 void can_init(can_message_callback_t callback_function);
 void can_receive_task(void *pvParameters);
 #endif

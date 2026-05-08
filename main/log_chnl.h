@@ -127,7 +127,7 @@
     X(SLIP_ANG_5_1) \
     X(SLIP_ANG_6_) \
     X(SLIP_ANG_6_1) \
-    X(WFT_FX_Force) \ 
+    X(WFT_FX_Force) \
     X(WFT_FX_Force1) \
     X(WFT_FY_Force) \
     X(WFT_FY_Force1) \
@@ -213,6 +213,12 @@
     X(RRT_TTB5) \
     X(RRT_TTB6) \
     X(RRT_TTB7) \
+    X(SW_BUTTON) \
+    X(SW_MLP) \
+    X(SW_MRP) \
+    X(SW_BLP) \
+    X(SW_BMP) \
+    X(SW_BRP) \
     X(CH_COUNT)
 
 // Generate the enum using the macro
@@ -269,6 +275,15 @@ typedef struct{
     int16_t POS5;
     int16_t POS6;
 } SLIP_t;
+
+typedef struct{
+    uint8_t button_agg;
+    uint8_t mid_left_pot;
+    uint8_t mid_right_pot;
+    uint8_t bot_left_pot;
+    uint8_t bot_mid_pot;
+    uint8_t bot_right_pot;
+} steering_data;
 
 extern imu_accel_t imu_accel;
 extern imu_gyro_t  imu_gyro;

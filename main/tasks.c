@@ -10,22 +10,6 @@
 
 static const char *TAG = "TASKS";
 
-#define TASK_STACK_CAN_RX 4096
-#define TASK_STACK_DTC_CHECK 2048
-#define TASK_STACK_GNSS_UART 4096
-#define TASK_STACK_UART_INPUT 4096
-#define TASK_STACK_UART_OUTPUT 8192
-#define TASK_STACK_LOG_BUFFER 4096
-#define TASK_STACK_LOG_FLUSH 4096
-
-#define TASK_PRIO_CAN_RX 12
-#define TASK_PRIO_LOG_BUFFER 9
-#define TASK_PRIO_LOG_FLUSH 8
-#define TASK_PRIO_GNSS_UART 8
-#define TASK_PRIO_UART_INPUT 7
-#define TASK_PRIO_UART_OUTPUT 6
-#define TASK_PRIO_DTC_CHECK 5
-
 extern void logBuffer_task(void *pvParameters);
 extern void log_flush_task(void *pvParameters);
 extern TaskHandle_t log_flush_task_handle;
