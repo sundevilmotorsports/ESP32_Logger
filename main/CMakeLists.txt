@@ -10,4 +10,5 @@ idf_component_register(SRCS     "gnss.c"
                                 "tasks.c"
                                 "server.c"
                                 "wifi.c"
+                                "servo.c"
                     INCLUDE_DIRS ".")

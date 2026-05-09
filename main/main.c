@@ -20,6 +20,7 @@
 #include "tasks.h"
 #include "wifi.h"
 #include "server.h"
+#include "servo.h"
 
 #define REFRESH_MS 10
 #define RING_CAP 256
@@ -57,6 +58,9 @@ int16_t frsg = 0, flsg = 0, rrsg = 0, rlsg = 0;
 
 wheel_data_s_t frw, flw, rlw, rrw;
 tiretemp_data frt, flt, rlt, rrt;
+steering_data sw;
+uint8_t REQ_F_ARB_POS;
+uint8_t REQ_R_ARB_POS;
 uint8_t testNo = 0;
 uint8_t canFifoFull = 0;
 uint8_t drs = 0;
@@ -213,6 +217,12 @@ static void process_can_message(twai_frame_t *message)
         break;
     case 0x3a2:
         memcpy(data, &rlt.tiretemp2, sizeof(rlt.tiretemp2));
+        break;
+    case 0x3b0:
+        memcpy(&sw, data, 6);
+        REQ_F_ARB_POS = (uint8_t) ((9  * sw.bot_left_pot)  / 255.0) + 1;
+        REQ_R_ARB_POS = (uint8_t) ((14 * sw.bot_right_pot) / 255.0) + 1;
+        // ESP_LOGI(TAG, "data: %u %u %u %u %u %u", data[0], data[1], data[2], data[3], data[4], data[5]);
         break;
 
     case ENGINE_STREAM_ID_2:
@@ -479,6 +489,12 @@ void logBuffer_task(void *pvParamaters)
         loggerEmplaceU32(logBuffer, GPS_SPD, GNSS_Handle.gSpeed);
         logBuffer[GPS_FIX] = GNSS_Handle.fixType;
 
+        logBuffer[SW_BUTTON] = sw.button_agg;
+        logBuffer[SW_MLP] = sw.mid_left_pot;
+        logBuffer[SW_MRP] = sw.mid_right_pot;
+        logBuffer[SW_BLP] = sw.bot_left_pot;
+        logBuffer[SW_BMP] = sw.bot_mid_pot;
+        logBuffer[SW_BRP] = sw.bot_right_pot;
         // Old WFT Handlers
         //Slip Angle Log Emplace
         // loggerEmplaceU16(logBuffer, SLIP_ANG_1_, SLIP.POS1);
@@ -562,6 +578,38 @@ void app_main(void){
     adc_init();
     can_init(process_can_message);
 
+    initialize_servo_timer(LEDC_TIMER_0);
+
+    ServoTaskArgs *f_servo_args = malloc(sizeof(ServoTaskArgs));
+    f_servo_args->frequency = 20;
+    f_servo_args->gpio = GPIO_NUM_36;
+    f_servo_args->REQ_ARB_POS = &REQ_F_ARB_POS;
+    f_servo_args->led_channel = LEDC_CHANNEL_0;
+    f_servo_args->led_timer = LEDC_TIMER_0;
+    f_servo_args->max_pos = 10;
+    
+    ServoTaskArgs *r_servo_args = malloc(sizeof(ServoTaskArgs));
+    r_servo_args->frequency = 20;
+    r_servo_args->gpio = GPIO_NUM_37;
+    r_servo_args->REQ_ARB_POS = &REQ_R_ARB_POS;
+    r_servo_args->led_channel = LEDC_CHANNEL_1;
+    r_servo_args->led_timer = LEDC_TIMER_0;
+    r_servo_args->max_pos = 15;
+
+    if(xTaskCreate(servo_task, "f_arb_task", 4096, f_servo_args, 10, NULL) != pdPASS){
+        ESP_LOGE(TAG, "Failed to start Front ARB task");
+        // If task isn't started set servos to max pos
+        ledc_set_duty(SERVO_PWM_SPEED_MODE, f_servo_args->led_channel, 737 + ((983 * f_servo_args->max_pos) / f_servo_args->max_pos)); 
+        ledc_update_duty(SERVO_PWM_SPEED_MODE, f_servo_args->led_channel);
+    }
+
+    if(xTaskCreate(servo_task, "f_arb_task", 4096, r_servo_args, 10, NULL) != pdPASS){
+        ESP_LOGE(TAG, "Failed to start Rear ARB task");
+        // If task isn't started set servos to max pos
+        ledc_set_duty(SERVO_PWM_SPEED_MODE, r_servo_args->led_channel, 737 + ((983 * r_servo_args->max_pos) / r_servo_args->max_pos)); 
+        ledc_update_duty(SERVO_PWM_SPEED_MODE, r_servo_args->led_channel);
+    }
+
     if (tasks_start_all() != ESP_OK){
         ESP_LOGE(TAG, "Failed to start RTOS tasks");
         return;
@@ -569,7 +617,10 @@ void app_main(void){
 
     // Show welcome message and help
     vTaskDelay(pdMS_TO_TICKS(500)); // Wait for tasks to start
+    REQ_F_ARB_POS = f_servo_args->max_pos;
+    REQ_R_ARB_POS = r_servo_args->max_pos;
     // Main loop - keep system alive
+    // int i = 0;
     while (1){
         // printf("\033[2J\033[H");
         // printf("WFT CAN1: Fx: %d, Fy: %d, Fz:%d, Mz:%d\n", WFT_1.Fx_Force, WFT_1.Fy_Force, WFT_1.Fz_Force,WFT_1.Mx_Moment);
@@ -577,9 +628,14 @@ void app_main(void){
         // printf("WFT CAN3: X_Accel: %d, Y_Accel: %d, Z_Accel:%d\n", WFT_3.X_Acceleration, WFT_3.Y_Acceleration, WFT_3.Z_Acceleration);
         // printf("Slip: Ch1: %d, Ch2: %d, Ch3:%d, Ch4:%d, Ch5:%d, Ch6:%d\n", SLIP.POS1, SLIP.POS2, SLIP.POS3, SLIP.POS4, SLIP.POS5, SLIP.POS6);
         // printf("Tire Temp FRT: %lld%lld RRT: %lld%lld\n", frt.tiretemp1, frt.tiretemp2, rrt.tiretemp1, rrt.tiretemp2);
+        // REQ_F_ARB_POS = i % f_servo_args->max_pos + 1;
+        // REQ_R_ARB_POS = i % r_servo_args->max_pos + 1;
+        // printf("Front ARB REQ POS:  %d\tRear ARB REQ POS:   %d\n", REQ_F_ARB_POS, REQ_R_ARB_POS);
+        // printf("Front ARB PWM:      %ld\tRear ARB PWM:      %ld\n", ledc_get_duty(SERVO_PWM_SPEED_MODE, f_servo_args->led_channel), ledc_get_duty(SERVO_PWM_SPEED_MODE, r_servo_args->led_channel));
+        // printf("Front ARB POS:      %lu\tRear ARB POS:      %lu\n", (uint32_t)(((ledc_get_duty(SERVO_PWM_SPEED_MODE, f_servo_args->led_channel) - 737) * f_servo_args->max_pos) / 983), (uint32_t)(((ledc_get_duty(SERVO_PWM_SPEED_MODE, r_servo_args->led_channel) - 737) * r_servo_args->max_pos) / 983));
+        // i++;
         vTaskDelay(pdMS_TO_TICKS(5000));
         // ESP_LOGI(TAG, "System heartbeat - Free heap: %ld bytes", esp_get_free_heap_size());
-
         if (can_msg_count == 0 && !http_server_is_running() && !server_started_once) {
             if (start_server() == ESP_OK) {
                 server_started_once = true;

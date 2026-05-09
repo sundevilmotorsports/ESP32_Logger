@@ -201,6 +201,12 @@
     X(RRT_TTB5) \
     X(RRT_TTB6) \
     X(RRT_TTB7) \
+    X(SW_BUTTON) \
+    X(SW_MLP) \
+    X(SW_MRP) \
+    X(SW_BLP) \
+    X(SW_BMP) \
+    X(SW_BRP) \
     X(CH_COUNT)
 
 /*
@@ -305,6 +311,15 @@ typedef struct{
     uint16_t objTemp;
     uint16_t rpm;
 } wheel_data_s_t;
+
+typedef struct{
+    uint8_t button_agg;
+    uint8_t mid_left_pot;
+    uint8_t mid_right_pot;
+    uint8_t bot_left_pot;
+    uint8_t bot_mid_pot;
+    uint8_t bot_right_pot;
+} steering_data;
 
 typedef struct{
     // const uint8_t stream_id_2 = 1000;
