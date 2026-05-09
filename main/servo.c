@@ -38,7 +38,7 @@ void servo_task(void *arg){
     for (;;) {
         const uint8_t requested_position = *requested_pos;
         if ((requested_position >= SERVO_POSITION_MIN) && (requested_position <= SERVO_POSITION_MAX) && (requested_position != last_applied_position)) {
-            ledc_set_duty(SERVO_PWM_SPEED_MODE, args->led_channel, 737 + ((983 * requested_position) / args->max_pos)); 
+            ledc_set_duty(SERVO_PWM_SPEED_MODE, args->led_channel, 737 + ((885 * requested_position) / args->max_pos)); 
             ledc_update_duty(SERVO_PWM_SPEED_MODE, args->led_channel);
         }
         vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(1000 / refresh_rate_hz));

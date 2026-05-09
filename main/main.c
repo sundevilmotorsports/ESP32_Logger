@@ -144,6 +144,7 @@ static void process_can_message(twai_frame_t *message)
     // IMU Data Handling
     case 0x360:
         memcpy(&imu_gyro, data, 6);
+        // ESP_LOGI(TAG, "data: %u %u %u %u %u %u", data[0], data[1], data[2], data[3], data[4], data[5]);
         break;
     case 0x361:
         memcpy(&imu_accel, data, 6);
@@ -224,9 +225,10 @@ static void process_can_message(twai_frame_t *message)
         memcpy(data, &rlt.tiretemp2, sizeof(rlt.tiretemp2));
         break;
     case 0x3b0:
-        memcpy(data, &sw, sizeof(sw));
-        REQ_F_ARB_POS = sw.bot_left_pot;
-        REQ_R_ARB_POS = sw.bot_right_pot;
+        memcpy(data, &sw, 6);
+        // REQ_F_ARB_POS = (uint8_t) ((9  * sw.bot_left_pot)  / 255.0) + 1;
+        // REQ_R_ARB_POS = (uint8_t) ((14 * sw.bot_right_pot) / 255.0) + 1;
+        // ESP_LOGI(TAG, "data: %u %u %u %u %u %u", data[0], data[1], data[2], data[3], data[4], data[5]);
         break;
     case 0x3e8:
         // Engine CAN Stream 2
@@ -534,7 +536,7 @@ void app_main(void){
     f_servo_args->REQ_ARB_POS = &REQ_F_ARB_POS;
     f_servo_args->led_channel = LEDC_CHANNEL_0;
     f_servo_args->led_timer = LEDC_TIMER_0;
-    f_servo_args->max_pos = 15;
+    f_servo_args->max_pos = 10;
     
     ServoTaskArgs *r_servo_args = malloc(sizeof(ServoTaskArgs));
     r_servo_args->frequency = 20;
@@ -569,7 +571,7 @@ void app_main(void){
     // Main loop - keep system alive
     // int i = 0;
     while (1){
-        // printf("\033[2J\033[H");
+        printf("\033[2J\033[H");
         // printf("WFT CAN1: Fx: %d, Fy: %d, Fz:%d, Mz:%d\n", WFT_1.Fx_Force, WFT_1.Fy_Force, WFT_1.Fz_Force,WFT_1.Mx_Moment);
         // printf("WFT CAN2: My: %d, Mz: %d, Wheelspeed:%d, Position:%d\n", WFT_2.My_Moment, WFT_2.Mz_Moment, WFT_2.Wheelspeed,WFT_2.Position);
         // printf("WFT CAN3: X_Accel: %d, Y_Accel: %d, Z_Accel:%d\n", WFT_3.X_Acceleration, WFT_3.Y_Acceleration, WFT_3.Z_Acceleration);
@@ -581,7 +583,7 @@ void app_main(void){
         // printf("Front ARB PWM:      %ld\tRear ARB PWM:      %ld\n", ledc_get_duty(SERVO_PWM_SPEED_MODE, f_servo_args->led_channel), ledc_get_duty(SERVO_PWM_SPEED_MODE, r_servo_args->led_channel));
         // printf("Front ARB POS:      %lu\tRear ARB POS:      %lu\n", (uint32_t)(((ledc_get_duty(SERVO_PWM_SPEED_MODE, f_servo_args->led_channel) - 737) * f_servo_args->max_pos) / 983), (uint32_t)(((ledc_get_duty(SERVO_PWM_SPEED_MODE, r_servo_args->led_channel) - 737) * r_servo_args->max_pos) / 983));
         // i++;
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        vTaskDelay(pdMS_TO_TICKS(500));
         // ESP_LOGI(TAG, "System heartbeat - Free heap: %ld bytes", esp_get_free_heap_size());
     }
 }
