@@ -225,9 +225,9 @@ static void process_can_message(twai_frame_t *message)
         memcpy(data, &rlt.tiretemp2, sizeof(rlt.tiretemp2));
         break;
     case 0x3b0:
-        memcpy(data, &sw, 6);
-        // REQ_F_ARB_POS = (uint8_t) ((9  * sw.bot_left_pot)  / 255.0) + 1;
-        // REQ_R_ARB_POS = (uint8_t) ((14 * sw.bot_right_pot) / 255.0) + 1;
+        memcpy(&sw, data, 6);
+        REQ_F_ARB_POS = (uint8_t) ((9  * sw.bot_left_pot)  / 255.0) + 1;
+        REQ_R_ARB_POS = (uint8_t) ((14 * sw.bot_right_pot) / 255.0) + 1;
         // ESP_LOGI(TAG, "data: %u %u %u %u %u %u", data[0], data[1], data[2], data[3], data[4], data[5]);
         break;
     case 0x3e8:
