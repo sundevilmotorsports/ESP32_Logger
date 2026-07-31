@@ -5,17 +5,17 @@
 #include "esp_log.h"
 #include "string.h"
 #include "driver/gpio.h"
+#include <stdlib.h>
 
 #define NEO_UART_PORT UART_NUM_1
 #define NEO_TX_PIN    GPIO_NUM_19
 #define NEO_RX_PIN    GPIO_NUM_20
-#define NEO_UART_BUF_SIZE 1024
 #define NEO_RD_BUF_SIZE 256
+#define NEO_LINE_BUF_SIZE 512
 
 static const char *TAG = "GNSS_DMA";
 static QueueHandle_t neo_uart_event_queue = NULL;
 TaskHandle_t gnss_task_handle = NULL;
-static uint8_t *dma_buffer = NULL;
 static bool gnss_ready = false;
 
 GNSS_StateHandle GNSS_Handle = {0};
@@ -33,8 +33,7 @@ void gnss_init(void) {
     };
 
     ESP_LOGI(TAG, "Installing UART driver...");
-    // Install UART driver with DMA support
-    esp_err_t ret = uart_driver_install(NEO_UART_PORT, GNSS_DMA_BUF_SIZE, 0, 20, &neo_uart_event_queue, 0);
+    esp_err_t ret = uart_driver_install(NEO_UART_PORT, GNSS_UART_RX_BUF_SIZE, 0, 20, &neo_uart_event_queue, 0);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "UART driver install failed: %s", esp_err_to_name(ret));
         neo_uart_event_queue = NULL;
@@ -56,23 +55,6 @@ void gnss_init(void) {
 
     ESP_LOGI(TAG, "UART configured successfully at 38400 baud");
 
-    // Enable pattern detection for NMEA sentence end ('\n')
-    ret = uart_enable_pattern_det_baud_intr(NEO_UART_PORT, GNSS_PATTERN_CHR, 1, 9, 0, 0);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "UART pattern detection enable failed: %s", esp_err_to_name(ret));
-        uart_driver_delete(NEO_UART_PORT);
-        neo_uart_event_queue = NULL;
-        return;
-    }
-
-    dma_buffer = (uint8_t*)heap_caps_malloc(GNSS_DMA_BUF_SIZE, MALLOC_CAP_DMA);
-    if (!dma_buffer) {
-        ESP_LOGE(TAG, "Failed to allocate DMA buffer");
-        uart_driver_delete(NEO_UART_PORT);
-        neo_uart_event_queue = NULL;
-        return;
-    }
-
     gnss_ready = true;
     ESP_LOGI(TAG, "GPS UART initialization complete");
 }
@@ -85,7 +67,7 @@ static bool parse_gngga(const char* sentence, GNSS_StateHandle* gps) {
     int quality = 0, satellites = 0;
     float hdop = 0.0, altitude = 0.0;
 
-    int parsed = sscanf(sentence, "$GNGGA,%[^,],%[^,],%c,%[^,],%c,%d,%d,%f,%f,M",
+    int parsed = sscanf(sentence, "$GNGGA,%15[^,],%15[^,],%c,%15[^,],%c,%d,%d,%f,%f,M",
                        time_str, lat_str, &lat_ns, lon_str, &lon_ew,
                        &quality, &satellites, &hdop, &altitude);
 
@@ -137,7 +119,7 @@ static bool parse_gnrmc(const char* sentence, GNSS_StateHandle* gps) {
     float speed = 0.0, course = 0.0;
     char date_str[16] = {0};
 
-    int parsed = sscanf(sentence, "$GNRMC,%[^,],%c,%[^,],%c,%[^,],%c,%f,%f,%[^,]",
+    int parsed = sscanf(sentence, "$GNRMC,%15[^,],%c,%15[^,],%c,%15[^,],%c,%f,%f,%15[^,]",
                        time_str, &status, lat_str, &lat_ns, lon_str, &lon_ew,
                        &speed, &course, date_str);
 
@@ -180,7 +162,7 @@ static void process_nmea_sentence(const char* sentence, size_t len) {
 
     char nmea_line[512];
     if (len >= sizeof(nmea_line)) {
-        ESP_LOGW(TAG, "NMEA sentence too long (%d bytes), truncating", len);
+        ESP_LOGW(TAG, "NMEA sentence too long (%u bytes), truncating", (unsigned)len);
         len = sizeof(nmea_line) - 1;
     }
     memcpy(nmea_line, sentence, len);
@@ -215,17 +197,19 @@ static void process_nmea_sentence(const char* sentence, size_t len) {
             ESP_LOGD(TAG, "GLL: Geographic position - latitude/longitude");
         }
     } else {
-        ESP_LOGD(TAG, "Non-NMEA data (%d bytes): %.*s", len, (int)len, nmea_line);
+        ESP_LOGD(TAG, "Non-NMEA data (%u bytes): %.*s", (unsigned)len, (int)len, nmea_line);
     }
 }
 
 void gnss_uart_task(void *pvParameters) {
     uart_event_t event;
-    size_t buffered_size;
+    uint8_t rx_data[NEO_RD_BUF_SIZE];
+    char line_buf[NEO_LINE_BUF_SIZE];
+    size_t line_len = 0;
 
     ESP_LOGI(TAG, "NEO-F9P DMA UART task started");
 
-    if (!gnss_ready || neo_uart_event_queue == NULL || dma_buffer == NULL) {
+    if (!gnss_ready || neo_uart_event_queue == NULL) {
         ESP_LOGE(TAG, "GNSS not initialized; stopping UART task");
         vTaskDelete(NULL);
         return;
@@ -234,37 +218,42 @@ void gnss_uart_task(void *pvParameters) {
     while (1) {
         if (xQueueReceive(neo_uart_event_queue, &event, portMAX_DELAY)) {
             switch (event.type) {
-                case UART_DATA:
-                    ESP_LOGD(TAG, "Received %d bytes via UART", event.size);
+                case UART_DATA: {
+                    size_t to_read = event.size;
+                    while (to_read > 0) {
+                        size_t chunk = to_read;
+                        if (chunk > sizeof(rx_data)) {
+                            chunk = sizeof(rx_data);
+                        }
+
+                        int read_len = uart_read_bytes(NEO_UART_PORT, rx_data, chunk, pdMS_TO_TICKS(20));
+                        if (read_len <= 0) {
+                            break;
+                        }
+
+                        to_read -= (size_t)read_len;
+
+                        for (int i = 0; i < read_len; i++) {
+                            char ch = (char)rx_data[i];
+
+                            if (ch == '\n') {
+                                process_nmea_sentence(line_buf, line_len);
+                                line_len = 0;
+                            } else if (ch == '\r') {
+                                // Ignore CR; LF terminates NMEA sentences.
+                            } else if (line_len < sizeof(line_buf) - 1) {
+                                line_buf[line_len++] = ch;
+                            } else {
+                                ESP_LOGW(TAG, "NMEA line too long; dropping partial sentence");
+                                line_len = 0;
+                            }
+                        }
+                    }
                     break;
+                }
 
                 case UART_PATTERN_DET:
-                    // Pattern detected - complete NMEA sentence received
-                    uart_get_buffered_data_len(NEO_UART_PORT, &buffered_size);
-                    ESP_LOGD(TAG, "Pattern detected, buffered size: %d", buffered_size);
-
-                    if (buffered_size > 0) {
-                        int pos = uart_pattern_pop_pos(NEO_UART_PORT);
-                        if (pos != -1 && pos < GNSS_DMA_BUF_SIZE - 1) {
-                            // Clear buffer before reading
-                            memset(dma_buffer, 0, GNSS_DMA_BUF_SIZE);
-
-                            // Read up to the pattern position + 1 (including the newline)
-                            int read_len = uart_read_bytes(NEO_UART_PORT, dma_buffer, pos + 1, 100 / portTICK_PERIOD_MS);
-                            if (read_len > 0) {
-                                ESP_LOGD(TAG, "Read %d bytes, processing NMEA sentence", read_len);
-                                // Process the complete NMEA sentence
-                                process_nmea_sentence((char*)dma_buffer, read_len - 1); // -1 to exclude newline
-                            } else {
-                                ESP_LOGW(TAG, "Failed to read data after pattern detection");
-                            }
-                        } else {
-                            uart_flush_input(NEO_UART_PORT);
-                            ESP_LOGW(TAG, "Pattern queue full or invalid position (%d), flushing buffer", pos);
-                        }
-                    } else {
-                        ESP_LOGW(TAG, "Pattern detected but no buffered data");
-                    }
+                    ESP_LOGD(TAG, "Unexpected UART pattern event");
                     break;
 
                 case UART_FIFO_OVF:
@@ -320,10 +309,6 @@ void gnss_stop(void) {
         neo_uart_event_queue = NULL;
     }
 
-    if (dma_buffer != NULL) {
-        free(dma_buffer);
-        dma_buffer = NULL;
-    }
 }
 
 bool gnss_is_initialized(void) {

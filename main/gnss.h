@@ -4,9 +4,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-// DMA buffer configuration
-#define GNSS_DMA_BUF_SIZE 2048
-#define GNSS_PATTERN_CHR '\n'  // NMEA sentences end with \n
+#define GNSS_UART_RX_BUF_SIZE 2048
 
 typedef struct
 {
