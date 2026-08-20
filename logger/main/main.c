@@ -374,7 +374,7 @@ esp_err_t start_server() {
     // start http server
     if(http_server_start() == ESP_OK) {
         ESP_LOGI(TAG, "Server started");
-        ESP_LOGI(TAG, "Connect to Wi-Fi 'data-logger' and visit: http://192.168.4.1/api/view");
+        ESP_LOGI(TAG, "Connect to Wi-Fi 'sdm26_logger' and visit: http://192.168.4.1/api/view");
         return ESP_OK;
     }
 
