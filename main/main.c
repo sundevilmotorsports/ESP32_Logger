@@ -67,6 +67,7 @@ uint8_t drs = 0;
 uint16_t brakeFluid = 0, throttleLoad = 0, brakeLoad = 0;
 
 engine_t engine;
+cooling_t cooling;
 
 imu_accel_t imu_accel;
 imu_gyro_t imu_gyro;
@@ -132,6 +133,17 @@ static void process_can_message(twai_frame_t *message)
     //     WFT_3.Z_Acceleration = data[3] | (data[4] << 8);
     //     // printf("WFT My: %d, Mz: %d\n", My, Mz);
     //     break;
+
+    // Coolant Flow - ids are based on a temporary local dbc
+    // raw scaled ints, big-endian: rate x0.01 L/min, vol x0.001 L. Scale in post.
+    case 0x100: // flow1
+        cooling.flow1_rate = (uint16_t)(data[0] << 8 | data[1]);
+        cooling.flow1_vol = ((uint32_t)data[2] << 24) | ((uint32_t)data[3] << 16) | ((uint32_t)data[4] << 8) | data[5];
+        break;
+    case 0x101: // flow2
+        cooling.flow2_rate = (uint16_t)(data[0] << 8 | data[1]);
+        cooling.flow2_vol = ((uint32_t)data[2] << 24) | ((uint32_t)data[3] << 16) | ((uint32_t)data[4] << 8) | data[5];
+        break;
 
     case 0x35F:
         drs = data[0];
@@ -468,6 +480,12 @@ void logBuffer_task(void *pvParamaters)
         loggerEmplaceU16(logBuffer, ENG_IMU_X, engine.imu_accel_x);
         loggerEmplaceU16(logBuffer, ENG_IMU_Y, engine.imu_accel_y);
         loggerEmplaceU16(logBuffer, ENG_IMU_Z, engine.imu_accel_z);
+
+        // Report cooling data
+        loggerEmplaceU32(logBuffer, CL_VOLA, cooling.flow1_vol);
+        loggerEmplaceU16(logBuffer, CL_RATEA, cooling.flow1_rate);
+        loggerEmplaceU32(logBuffer, CL_VOLB, cooling.flow2_vol);
+        loggerEmplaceU16(logBuffer, CL_RATEB, cooling.flow2_rate);
 
         // Report DTC Data
         logBuffer[DTC_FLW] = dtc_devices[flWheelBoard_DTC]->errState;

@@ -207,6 +207,18 @@
     X(SW_BLP) \
     X(SW_BMP) \
     X(SW_BRP) \
+    X(CL_VOLA) \
+    X(CL_VOLA1) \
+    X(CL_VOLA2) \
+    X(CL_VOLA3) \
+    X(CL_RATEA) \
+    X(CL_RATEA1) \
+    X(CL_VOLB) \
+    X(CL_VOLB1) \
+    X(CL_VOLB2) \
+    X(CL_VOLB3) \
+    X(CL_RATEB) \
+    X(CL_RATEB1) \
     X(CH_COUNT)
 
 /*
@@ -373,10 +385,18 @@ typedef struct{
 
 } engine_t;
 
+typedef struct {
+    uint32_t flow1_vol;
+    uint16_t flow1_rate;
+    uint32_t flow2_vol;
+    uint16_t flow2_rate;
+} cooling_t;
+
 extern engine_t engine;
 extern imu_accel_t imu_accel;
 extern imu_gyro_t  imu_gyro;
 extern tiretemp_data frt, flt, rlt, rrt;
+extern cooling_t cooling;
 
 // Old WFT Handlers
 // extern WFT_CAN1_t WFT_1;
