@@ -157,14 +157,14 @@ static void process_can_message(twai_frame_t *message)
     case 0x372:
         memcpy(data, &flt.tiretemp2, sizeof(flt.tiretemp2));
         break;
-        
+
     case 0x380:
         // Front Right Wheel Board
         // printf("FR WB\n");
         frw.rpm = data[0] << 8 | data[1];
         frw.objTemp = data[2] << 8 | data[3];
         frw.ambTemp = data[4] << 8 | data[5];
-        
+
         // DTC Response Update
         DTC_CAN_Response_Measurement(dtc_devices[frWheelBoard_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
         break;
@@ -176,7 +176,7 @@ static void process_can_message(twai_frame_t *message)
         // printf("FR Tire Temp2\n");
         memcpy(data, &frt.tiretemp2, sizeof(frt.tiretemp2));
     break;
-    
+
     case 0x390:
         // Rear Right Wheel Board
         // printf("RR WB\n");
@@ -202,7 +202,7 @@ static void process_can_message(twai_frame_t *message)
         rlw.rpm = data[0] << 8 | data[1];
         rlw.objTemp = data[2] << 8 | data[3];
         rlw.ambTemp = data[4] << 8 | data[5];
-        
+
         // DTC Response Update
         DTC_CAN_Response_Measurement(dtc_devices[rlWheelBoard_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
         break;
@@ -227,7 +227,7 @@ static void process_can_message(twai_frame_t *message)
             break;
 
         case 0x1:
-            engine.lambda1 = data[1];
+            engine.lambda1 = data[1] / 100; // ECU multiplies by 100 for dash
             engine.tps = data[2];
             engine.gear = data[3];
             engine.gp_speed1 = data[4] << 8 | data[5];
@@ -248,7 +248,7 @@ static void process_can_message(twai_frame_t *message)
                 break;
         }
         break;
-    
+
     case ENGINE_STREAM_ID_7:
         switch (data[0]){
             case 0x0:
@@ -256,7 +256,7 @@ static void process_can_message(twai_frame_t *message)
                 break;
         }
         break;
-    
+
     case ENGINE_STREAM_ID_8:
         engine.imu_accel_x = data[0] << 8 | data[1];
         engine.imu_accel_y = data[2] << 8 | data[3];
