@@ -35,11 +35,71 @@ nvs_handle_t hnvs;
 FILE *log_file = NULL;
 SemaphoreHandle_t log_file_mutex;
 static char current_log_filepath[MAX_FILE_NAME_LENGTH];
+static off_t log_committed_size = -1;
 
 //Forward Declarations
 static esp_err_t open_log_file(const char *filename);
 static bool is_valid_fat32_filename_char(char ch);
 static esp_err_t validate_filename(const char *filename);
+static esp_err_t sync_log_file_locked(void);
+static esp_err_t rollback_log_file_locked(void);
+
+static esp_err_t sync_log_file_locked(void) {
+    if (log_file == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (fflush(log_file) != 0) {
+        ESP_LOGE(TAG, "fflush failed: %s (errno=%d)", strerror(errno), errno);
+        return ESP_FAIL;
+    }
+
+    int fd = fileno(log_file);
+    if (fd < 0) {
+        ESP_LOGE(TAG, "fileno failed: %s (errno=%d)", strerror(errno), errno);
+        return ESP_FAIL;
+    }
+
+    if (fsync(fd) != 0) {
+        ESP_LOGE(TAG, "fsync failed: %s (errno=%d)", strerror(errno), errno);
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
+
+static esp_err_t rollback_log_file_locked(void) {
+    if (log_file == NULL || log_committed_size < 0) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    int fd = fileno(log_file);
+    if (fd < 0) {
+        ESP_LOGE(TAG, "Cannot roll back log file: fileno failed: %s (errno=%d)", strerror(errno), errno);
+        return ESP_FAIL;
+    }
+
+    clearerr(log_file);
+    if (ftruncate(fd, log_committed_size) != 0) {
+        ESP_LOGE(TAG, "Cannot roll back log file to %lld bytes: %s (errno=%d)",
+                 (long long)log_committed_size, strerror(errno), errno);
+        return ESP_FAIL;
+    }
+
+    if (fseeko(log_file, log_committed_size, SEEK_SET) != 0) {
+        ESP_LOGE(TAG, "Cannot restore log position to %lld: %s (errno=%d)",
+                 (long long)log_committed_size, strerror(errno), errno);
+        return ESP_FAIL;
+    }
+
+    clearerr(log_file);
+    if (fsync(fd) != 0) {
+        ESP_LOGE(TAG, "Failed to commit log rollback: %s (errno=%d)", strerror(errno), errno);
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
 
 
 //Utility Functions
@@ -318,9 +378,20 @@ static esp_err_t open_log_file(const char *filename_in) {
     
     // Close existing file if open
     if (log_file != NULL) {
-        fflush(log_file);
-        fclose(log_file);
+        if (sync_log_file_locked() != ESP_OK) {
+            ESP_LOGE(TAG, "Refusing to close the active log after a failed sync");
+            xSemaphoreGive(log_file_mutex);
+            return ESP_FAIL;
+        }
+        if (fclose(log_file) != 0) {
+            ESP_LOGE(TAG, "Failed to close previous log file: %s (errno=%d)", strerror(errno), errno);
+            log_file = NULL;
+            log_committed_size = -1;
+            xSemaphoreGive(log_file_mutex);
+            return ESP_FAIL;
+        }
         log_file = NULL;
+        log_committed_size = -1;
         ESP_LOGI(TAG, "Closed previous log file");
     }
     
@@ -357,8 +428,15 @@ static esp_err_t open_log_file(const char *filename_in) {
         }
     }
     
-    // Set buffer mode for better performance
-    setvbuf(log_file, NULL, _IOFBF, 4096);  // Full buffering with 4KB buffer
+    // Keep stdio unbuffered so fwrite() reports the underlying VFS write result.
+    // The flush task already groups records into approximately 4KB writes.
+    if (setvbuf(log_file, NULL, _IONBF, 0) != 0) {
+        ESP_LOGE(TAG, "Failed to configure unbuffered log writes");
+        fclose(log_file);
+        log_file = NULL;
+        xSemaphoreGive(log_file_mutex);
+        return ESP_FAIL;
+    }
     
     // Update current filename
     strncpy(current_log_filepath, filename, sizeof(current_log_filepath) - 1);
@@ -426,8 +504,24 @@ static esp_err_t open_log_file(const char *filename_in) {
     // Clean up
     free(csv_header);
 
-    // Flush to ensure header is written immediately
-    fflush(log_file);
+    // Commit the header before accepting data records.
+    if (sync_log_file_locked() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to commit log header");
+        fclose(log_file);
+        log_file = NULL;
+        log_committed_size = -1;
+        xSemaphoreGive(log_file_mutex);
+        return ESP_FAIL;
+    }
+
+    log_committed_size = ftello(log_file);
+    if (log_committed_size < 0) {
+        ESP_LOGE(TAG, "Failed to determine committed log size: %s (errno=%d)", strerror(errno), errno);
+        fclose(log_file);
+        log_file = NULL;
+        xSemaphoreGive(log_file_mutex);
+        return ESP_FAIL;
+    }
     
     
     xSemaphoreGive(log_file_mutex);
@@ -450,19 +544,63 @@ esp_err_t fast_log_buffer(const uint8_t *data_buffer, size_t buffer_len) {
         return ESP_ERR_TIMEOUT;
     }
     esp_err_t result = ESP_OK;
-    
-    // Critical section - file operations
-    if (log_file != NULL) {
-        size_t written = fwrite(data_buffer, sizeof(uint8_t), buffer_len, log_file);
-        
-        if (written != buffer_len) {
-            ESP_LOGE(TAG, "Log write failed: %zu/%zu bytes", written, buffer_len);
+
+    // log_committed_size advances only after the complete chunk is durable.
+    // If any step fails, truncate back to that offset so retrying cannot append
+    // a duplicate or a partial record.
+    if (log_file != NULL && log_committed_size >= 0) {
+        int fd = fileno(log_file);
+        struct stat file_info;
+
+        if (fd < 0 || fstat(fd, &file_info) != 0) {
+            ESP_LOGE(TAG, "Unable to inspect log file before write: %s (errno=%d)", strerror(errno), errno);
+            result = ESP_FAIL;
+        } else if (file_info.st_size < log_committed_size) {
+            ESP_LOGE(TAG, "Log file shrank from committed size %lld to %lld; refusing to append",
+                     (long long)log_committed_size, (long long)file_info.st_size);
             result = ESP_FAIL;
         } else {
-            // Only flush periodically for performance
-            static uint32_t write_count = 0;
-            if (++write_count % 10 == 0) {
-                fflush(log_file);
+            if (file_info.st_size > log_committed_size && rollback_log_file_locked() != ESP_OK) {
+                result = ESP_FAIL;
+            }
+
+            if (result == ESP_OK && fseeko(log_file, log_committed_size, SEEK_SET) != 0) {
+                ESP_LOGE(TAG, "Failed to seek to committed log offset %lld: %s (errno=%d)",
+                         (long long)log_committed_size, strerror(errno), errno);
+                result = ESP_FAIL;
+            }
+
+            size_t written = 0;
+            if (result == ESP_OK) {
+                clearerr(log_file);
+                written = fwrite(data_buffer, 1, buffer_len, log_file);
+                if (written != buffer_len) {
+                    ESP_LOGE(TAG, "Log write failed: %zu/%zu bytes: %s (errno=%d)",
+                             written, buffer_len, strerror(errno), errno);
+                    result = ESP_FAIL;
+                }
+            }
+
+            if (result == ESP_OK && sync_log_file_locked() != ESP_OK) {
+                result = ESP_FAIL;
+            }
+
+            off_t expected_size = log_committed_size + (off_t)buffer_len;
+            if (result == ESP_OK) {
+                if (fstat(fd, &file_info) != 0) {
+                    ESP_LOGE(TAG, "Unable to verify committed log size: %s (errno=%d)", strerror(errno), errno);
+                    result = ESP_FAIL;
+                } else if (file_info.st_size != expected_size) {
+                    ESP_LOGE(TAG, "Committed log size mismatch: expected %lld, got %lld",
+                             (long long)expected_size, (long long)file_info.st_size);
+                    result = ESP_FAIL;
+                }
+            }
+
+            if (result == ESP_OK) {
+                log_committed_size = expected_size;
+            } else if (rollback_log_file_locked() != ESP_OK) {
+                ESP_LOGE(TAG, "Log rollback failed; queued data will remain pending until recovery");
             }
         }
     } else {
@@ -475,18 +613,19 @@ esp_err_t fast_log_buffer(const uint8_t *data_buffer, size_t buffer_len) {
     return result;
 }
 
-void sdcard_sync( void ){
-    if(xSemaphoreTake(log_file_mutex, pdMS_TO_TICKS(200))){
-        if(log_file != NULL){
-            fflush(log_file);
-
-            int fd = fileno(log_file);
-            if(fd >= 0) {
-                fsync(fd);
-            }
-        }
-        xSemaphoreGive(log_file_mutex);
+esp_err_t sdcard_sync(void) {
+    if (log_file_mutex == NULL) {
+        return ESP_ERR_INVALID_STATE;
     }
+
+    if (xSemaphoreTake(log_file_mutex, pdMS_TO_TICKS(200)) != pdTRUE) {
+        ESP_LOGW(TAG, "Failed to acquire log file mutex for sync");
+        return ESP_ERR_TIMEOUT;
+    }
+
+    esp_err_t result = sync_log_file_locked();
+    xSemaphoreGive(log_file_mutex);
+    return result;
 }
 
 esp_err_t sdcard_create_numbered_log_file(const char *filename){

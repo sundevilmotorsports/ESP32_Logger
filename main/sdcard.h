@@ -98,8 +98,11 @@ const char* sdcard_get_current_log_filepath(void);
  * Use this to reduce data loss risk on unexpected power loss. The call is
  * safe to call from multiple contexts; it will time out if the mutex cannot be
  * acquired.
+ *
+ * @return ESP_OK when the stream and device sync both succeed, otherwise an
+ *         error code.
  */
-void sdcard_sync(void);
+esp_err_t sdcard_sync(void);
 
 // ============================================================================
 // NVS (NON-VOLATILE STORAGE) FUNCTIONS

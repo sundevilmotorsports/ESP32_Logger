@@ -316,26 +316,34 @@ static void process_can_message(twai_frame_t *message)
 
 void log_flush_task(void *pvParamaters)
 {
+    size_t pending_entries = 0;
+    size_t pending_entry_index = 0;
+    uint32_t retry_count = 0;
+
     for (;;)
     {
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        if (pending_entry_index >= pending_entries) {
+            pending_entries = 0;
+            pending_entry_index = 0;
 
-        if (log_ring == NULL)
-        {
-            ESP_LOGW(TAG, "Log ring not initialized; flush skipped");
-            continue;
-        }
+            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-        size_t entries = 0;
-        uint8_t *dst = log_flush_staging;
-        while (entries < RING_CAP)
-        {
-            if (log_ring_read(log_ring, dst) != 0)
+            if (log_ring == NULL)
             {
-                break;
+                ESP_LOGW(TAG, "Log ring not initialized; flush skipped");
+                continue;
             }
-            entries++;
-            dst += CH_COUNT;
+
+            uint8_t *dst = log_flush_staging;
+            while (pending_entries < RING_CAP)
+            {
+                if (log_ring_read(log_ring, dst) != 0)
+                {
+                    break;
+                }
+                pending_entries++;
+                dst += CH_COUNT;
+            }
         }
 
         const size_t target_chunk_bytes = 4096; // Match SD file buffer size for better throughput.
@@ -344,21 +352,40 @@ void log_flush_task(void *pvParamaters)
             chunk_entries = 1;
         }
 
-        size_t entry_index = 0;
-        while (entry_index < entries) {
-            size_t remaining_entries = entries - entry_index;
+        while (pending_entry_index < pending_entries) {
+            size_t remaining_entries = pending_entries - pending_entry_index;
             size_t write_entries = remaining_entries < chunk_entries ? remaining_entries : chunk_entries;
             size_t write_bytes = write_entries * (size_t)CH_COUNT;
 
-            esp_err_t result = fast_log_buffer(log_flush_staging + (entry_index * (size_t)CH_COUNT), write_bytes);
+            esp_err_t result = fast_log_buffer(
+                log_flush_staging + (pending_entry_index * (size_t)CH_COUNT),
+                write_bytes);
             if (result != ESP_OK)
             {
-                ESP_LOGW(TAG, "Flush write failed at entry %u/%u", (unsigned)(entry_index + 1), (unsigned)entries);
-                break;
+                retry_count++;
+                if (retry_count == 1 || retry_count % 10 == 0) {
+                    ESP_LOGE(TAG,
+                             "Flush write failed at entry %u/%u; retaining %u records for retry (attempt %u)",
+                             (unsigned)(pending_entry_index + 1),
+                             (unsigned)pending_entries,
+                             (unsigned)(pending_entries - pending_entry_index),
+                             (unsigned)retry_count);
+                }
+                vTaskDelay(pdMS_TO_TICKS(100));
+                continue;
             }
-            entry_index += write_entries;
+
+            if (retry_count > 0) {
+                ESP_LOGI(TAG, "Log write recovered after %u retries", (unsigned)retry_count);
+                retry_count = 0;
+            }
+            pending_entry_index += write_entries;
         }
-        sdcard_sync();
+
+        esp_err_t sync_result = sdcard_sync();
+        if (sync_result != ESP_OK) {
+            ESP_LOGE(TAG, "Final log sync failed: %s", esp_err_to_name(sync_result));
+        }
     }
 }
 
@@ -528,7 +555,7 @@ void logBuffer_task(void *pvParamaters)
 }
 
 esp_err_t start_server() {
-    // start wifi
+    //start wifi
     wifi_init();
 
     // start http server
@@ -580,12 +607,12 @@ void app_main(void){
         vTaskDelay(pdMS_TO_TICKS(5000));
         // ESP_LOGI(TAG, "System heartbeat - Free heap: %ld bytes", esp_get_free_heap_size());
 
-        if (can_msg_count == 0 && !http_server_is_running() && !server_started_once) {
-            if (start_server() == ESP_OK) {
-                server_started_once = true;
-            }
-        }
+        // if (can_msg_count == 0 && !http_server_is_running() && !server_started_once) {
+        //     if (start_server() == ESP_OK) {
+        //         server_started_once = true;
+        //     }
+        // }
 
-        auto_server_stop();
+        // auto_server_stop();
     }
 }
