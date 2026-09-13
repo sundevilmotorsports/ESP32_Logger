@@ -238,6 +238,27 @@ static void process_can_message(twai_frame_t *message)
             engine.fuel_pressure = data[2] << 8 | data[3];
             DTC_CAN_Response_Measurement(dtc_devices[engine_DTC], pdTICKS_TO_MS(xTaskGetTickCount()));
             break;
+
+        // Frame 4
+        case 0x3:
+            engine.knock_count_global = data[1];
+            engine.ign_angle = data[2];
+            engine.ign_cut_pct = data[3];
+            engine.fuel_cut_pct = data[4];
+            engine.idle_target = data[5];
+            engine.lambda_fuel_corr = data[6];
+            engine.lambda_target_err = data[7];
+            break;
+
+        // Frame 5
+        case 0x4:
+            engine.in_gear = data[1];
+            engine.upshift_act = data[2];
+            engine.downshift_act = data[3];
+            engine.launch_ctrl_stat = data[4];
+            engine.eng_fan_1 = data[5];
+            engine.fuel_left = data[6];
+            break;
         }
         break;
 
@@ -478,6 +499,19 @@ void logBuffer_task(void *pvParamaters)
         loggerEmplaceU16(logBuffer, GP_SPEED, engine.gp_speed1);
         loggerEmplaceU16(logBuffer, APS_MAIN, engine.aps_main);
         loggerEmplaceU16(logBuffer, FUEL_PRESS, engine.fuel_pressure);
+        logBuffer[KNOCK_COUNT] = engine.knock_count_global;
+        logBuffer[IGN_ANGLE] = engine.ign_angle;
+        logBuffer[IGN_CUT_PCT] = engine.ign_cut_pct;
+        logBuffer[FUEL_CUT_PCT] = engine.fuel_cut_pct;
+        logBuffer[IDLE_TARGET] = engine.idle_target;
+        logBuffer[LAMBDA_FUEL_CORR] = engine.lambda_fuel_corr;
+        logBuffer[LAMBDA_TARGET_ERR] = engine.lambda_target_err;
+        logBuffer[IN_GEAR] = engine.in_gear;
+        logBuffer[UPSHIFT_ACT] = engine.upshift_act;
+        logBuffer[DOWNSHIFT_ACT] = engine.downshift_act;
+        logBuffer[LAUNCH_CTRL_STAT] = engine.launch_ctrl_stat;
+        logBuffer[ENG_FAN_1] = engine.eng_fan_1;
+        logBuffer[FUEL_LEVEL] = engine.fuel_left;
         loggerEmplaceU16(logBuffer, ACCEL_FUEL, engine.accel_fuel);
         loggerEmplaceU16(logBuffer, ACCUM_DIST, engine.accumulated_dist);
         loggerEmplaceU16(logBuffer, MAP, engine.map);

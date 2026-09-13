@@ -112,6 +112,19 @@
     X(APS_MAIN1,        "%_APS_main1") \
     X(FUEL_PRESS,       "p_Fuel") \
     X(FUEL_PRESS1,      "p_Fuel1") \
+    X(KNOCK_COUNT,      "n_knock_count") \
+    X(IGN_ANGLE,        "d_ign_angle") \
+    X(IGN_CUT_PCT,      "%_ign_cut") \
+    X(FUEL_CUT_PCT,     "%_fuel_cut") \
+    X(IDLE_TARGET,      "r_idle_target") \
+    X(LAMBDA_FUEL_CORR, "%_lambda_corr") \
+    X(LAMBDA_TARGET_ERR,"Lambda_Target_Err") \
+    X(IN_GEAR,          "in_gear") \
+    X(UPSHIFT_ACT,      "upshift_act") \
+    X(DOWNSHIFT_ACT,    "downshift_act") \
+    X(LAUNCH_CTRL_STAT, "launch_ctrl_stat") \
+    X(ENG_FAN_1,        "eng_fan_1") \
+    X(FUEL_LEVEL,       "%_fuel_left") \
     X(ACCEL_FUEL,       "t_fuel_accel") \
     X(ACCEL_FUEL1,      "t_fuel_accel1") \
     X(ACCUM_DIST,       "acc_distance") \
@@ -341,6 +354,21 @@ typedef struct{
     //Frame 3
     uint16_t aps_main;
     uint16_t fuel_pressure;
+    //Frame 4
+    uint8_t knock_count_global;
+    uint8_t ign_angle;
+    uint8_t ign_cut_pct;
+    uint8_t fuel_cut_pct;
+    uint8_t idle_target;
+    uint8_t lambda_fuel_corr;
+    uint8_t lambda_target_err;
+    //Frame 5
+    uint8_t in_gear;
+    uint8_t upshift_act;
+    uint8_t downshift_act;
+    uint8_t launch_ctrl_stat;
+    uint8_t eng_fan_1;
+    uint8_t fuel_left;
 
     //Stream 3 Data:
     //Frame 1:
