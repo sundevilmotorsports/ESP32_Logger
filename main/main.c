@@ -5,6 +5,7 @@
 #include "freertos/task.h"
 #include "driver/uart.h"
 #include "esp_timer.h"
+#include "esp_system.h"
 #include "esp_freertos_hooks.h"
 #include <string.h>
 #include "dtc.h"
@@ -613,6 +614,12 @@ void app_main(void){
         ESP_LOGE(TAG, "Failed to create log ring buffer");
         return;
     }
+
+    // Record why this boot happened (panic, brownout, watchdog, power-on, ...)
+    // so corrupted/truncated recordings can be traced back to a cause.
+    esp_reset_reason_t reset_reason = esp_reset_reason();
+    logBuffer[RESET_REASON] = (uint8_t)reset_reason;
+    ESP_LOGI(TAG, "Reset reason: %d", (int)reset_reason);
 
     // Initialize UART
     sdcard_init();

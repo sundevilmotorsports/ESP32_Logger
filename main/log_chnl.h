@@ -232,6 +232,7 @@
     X(CL_VOLB3,         "CL_VOLB3") \
     X(CL_RATEB,         "CL_RATEB") \
     X(CL_RATEB1,        "CL_RATEB1") \
+    X(RESET_REASON,     "RESET_REASON") \
     X(CH_COUNT,         "CH_COUNT")
 
 /*
